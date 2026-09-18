@@ -208,6 +208,17 @@ class RAGPipeline:
         FoundryLocalManager.initialize(config)
         manager = FoundryLocalManager.instance
 
+        # Step 1.5: Explicitly download & register GPU Execution Providers.
+        # Without this, the SDK may silently fall back to CPU.
+        # This forces it to discover and activate DirectML / CUDA / etc.
+        print("[>>] Registering hardware execution providers (GPU/NPU)...")
+        try:
+            ep_result = manager.download_and_register_eps()
+            print(f"  [OK] EP registration result: {ep_result}")
+        except Exception as ep_err:
+            print(f"  [WARN] EP registration failed ({ep_err}), falling back to defaults.")
+            ep_result = None
+
         # Step 2: Load the EMBEDDING model
         print(f"[>>] Loading embedding model: {EMBEDDING_MODEL}")
         self._embedding_model = manager.catalog.get_model(EMBEDDING_MODEL)
@@ -237,45 +248,39 @@ class RAGPipeline:
         self._is_initialized = True
 
         # Step 4: Log detected hardware acceleration
-        # The Foundry Local SDK (especially foundry-local-sdk-winml on Windows)
-        # auto-detects the best Execution Provider: CUDA > DirectML > CPU.
-        # We log what was selected so the user knows if GPU is active.
-        self._log_hardware_info()
+        self._log_hardware_info(ep_result)
 
         print("[OK] RAG Pipeline fully initialized!\n")
 
-    def _log_hardware_info(self):
+    def _log_hardware_info(self, ep_result=None):
         """
-        Log which hardware acceleration backend was auto-selected.
+        Log which hardware acceleration backend was registered.
 
-        The SDK chooses the optimal Execution Provider (EP) automatically:
-          - NVIDIA GPU  -> CUDAExecutionProvider
-          - AMD / Intel -> DmlExecutionProvider (DirectML, Windows only)
-          - No GPU      -> CPUExecutionProvider (fallback)
-
-        No hardcoding needed -- the SDK handles detection internally.
-        We just read and report what was chosen.
+        Args:
+            ep_result: The result from download_and_register_eps(), if available.
         """
         try:
-            # Attempt to read EP info from the loaded model's properties
-            ep = getattr(self._chat_model, 'execution_provider', None)
-            if ep:
-                print(f"  [HW] Execution Provider: {ep}")
+            if ep_result is not None:
+                print(f"  [HW] Execution Providers registered: {ep_result}")
             else:
-                # If the attribute isn't available, check via model info
-                model_info = getattr(self._chat_model, 'info', None)
-                if model_info:
-                    variant = getattr(model_info, 'variant', None)
-                    if variant and 'cuda' in str(variant).lower():
-                        print("  [HW] Detected: CUDA (NVIDIA GPU)")
-                    elif variant and 'dml' in str(variant).lower():
-                        print("  [HW] Detected: DirectML (GPU)")
-                    else:
-                        print(f"  [HW] Model variant: {variant or 'auto-selected'}")
+                # Fallback: attempt to read EP info from the model
+                ep = getattr(self._chat_model, 'execution_provider', None)
+                if ep:
+                    print(f"  [HW] Execution Provider: {ep}")
                 else:
-                    print("  [HW] Execution Provider: auto-detected by SDK")
+                    model_info = getattr(self._chat_model, 'info', None)
+                    if model_info:
+                        variant = getattr(model_info, 'variant', None)
+                        if variant and 'cuda' in str(variant).lower():
+                            print("  [HW] Detected: CUDA (NVIDIA GPU)")
+                        elif variant and 'dml' in str(variant).lower():
+                            print("  [HW] Detected: DirectML (GPU)")
+                        else:
+                            print(f"  [HW] Model variant: {variant or 'auto-selected'}")
+                    else:
+                        print("  [HW] Execution Provider: auto-detected by SDK")
         except Exception:
-            print("  [HW] Execution Provider: auto-detected by SDK")
+            print("  [HW] Execution Provider: could not determine")
 
     # ──────────────────────────────────────────────────────
     # RETRIEVAL: Find relevant chunks from SQLite
@@ -488,8 +493,9 @@ class RAGPipeline:
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
         else:
-            # No relevant chunks found -- tell the model explicitly
-            context = "(No relevant documents were found in the knowledge base.)"
+            # No chunks passed the similarity threshold.
+            # Pass EMPTY context so the system prompt's "chat normally" rule activates.
+            context = ""
 
         messages = self._build_messages(question, context)
 
@@ -544,7 +550,8 @@ class RAGPipeline:
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
         else:
-            context = "(No relevant documents were found in the knowledge base.)"
+            # Empty context triggers the "chat normally" system prompt behavior
+            context = ""
 
         messages = self._build_messages(question, context)
 

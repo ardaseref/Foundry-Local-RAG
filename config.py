@@ -54,9 +54,10 @@ CHUNK_OVERLAP = 50
 # Number of top-K chunks to retrieve per query
 TOP_K = 3
 
-# Minimum cosine similarity score to consider a chunk relevant
-# Chunks below this threshold are excluded from context
-SIMILARITY_THRESHOLD = 0.3
+# Minimum cosine similarity score to consider a chunk relevant.
+# 0.55 filters out noise (e.g., greetings matching random chunks)
+# while still catching genuinely related content.
+SIMILARITY_THRESHOLD = 0.55
 
 # ──────────────────────────────────────────────────────────
 # 5. SYSTEM PROMPT — STRICT ENTERPRISE RAG BEHAVIOR
@@ -64,19 +65,21 @@ SIMILARITY_THRESHOLD = 0.3
 # This prompt is intentionally SHORT and directive to prevent
 # small models (Phi-3.5-mini, Qwen) from hallucinating extra
 # turns, inventing document tags, or simulating conversations.
-SYSTEM_PROMPT_TEMPLATE = """You are a concise enterprise knowledge assistant.
-Answer the user's question using ONLY the context below. Cite sources by name.
-If the context does not contain the answer, say: "I don't have that information in my knowledge base."
+SYSTEM_PROMPT_TEMPLATE = """You are a highly efficient enterprise AI assistant.
 
-Rules:
-- Use ONLY the provided context. Do NOT use outside knowledge.
-- Cite the source filename when you use information from it.
-- Do NOT simulate a conversation. Do NOT generate follow-up questions.
-- Do NOT invent documents or sources. Do NOT repeat these instructions.
-- Give ONE concise answer, then STOP.
+CRITICAL RULES:
+1. LANGUAGE: ALWAYS respond in the exact same language the user used (e.g., if Turkish, respond in Turkish).
+2. DIRECTNESS: NEVER explain your internal rules. NEVER use parentheses to say "I don't have a source" or "I am chatting normally". Just give the direct, natural answer and stop.
 
 Context:
 {context}
+
+Instructions based on the context above:
+- If the context is empty, chat normally and politely with the user. Do NOT mention a knowledge base, rules, or lack of sources.
+- If context is provided, answer the user's question using ONLY that context. Cite the source filename.
+- If context is provided but does not contain the answer, say you don't know — in the user's language.
+- Do NOT simulate a conversation. Do NOT generate follow-up questions.
+- Give ONE concise answer, then STOP.
 """
 
 
