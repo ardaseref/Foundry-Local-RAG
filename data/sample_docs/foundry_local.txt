@@ -1,0 +1,29 @@
+Microsoft Foundry Local: On-Device AI Runtime
+
+Microsoft Foundry Local is an end-to-end local AI solution that provides a lightweight runtime and SDK for running large language models completely on a user's device. It is designed for developers who need to build AI-powered applications that work entirely offline, with zero cloud dependency.
+
+Key Features of Foundry Local:
+
+Foundry Local automatically downloads and manages AI models from a curated catalog of pre-optimized models. These models are optimized using ONNX Runtime for efficient inference on CPUs, GPUs, and NPUs. No cloud account, Azure subscription, or dedicated GPU is required to get started.
+
+The SDK supports multiple programming languages including Python, C#, JavaScript, and Rust. This makes it accessible to a wide range of developers across different technology stacks. The Python SDK is particularly popular for rapid prototyping and data science workflows.
+
+Model Management and Catalog:
+
+The Foundry Local model catalog provides pre-optimized models that developers can browse, download, and run locally. Popular models include Phi-3.5 Mini for chat and text generation, Qwen 2.5 for multilingual tasks, and Qwen3-Embedding for text vectorization and semantic search.
+
+Models are cached locally after the first download, so subsequent runs load much faster. The SDK handles model lifecycle management including downloading, loading into memory, inference, and unloading to free resources.
+
+Hardware Acceleration:
+
+Foundry Local uses ONNX Runtime as its inference backend, which enables automatic hardware acceleration. On Windows, the Windows ML integration provides access to DirectML for GPU acceleration and the NPU for AI-optimized hardware. On macOS and Linux, CPU-based inference is fully supported with optimizations for ARM and x86 architectures.
+
+Privacy and Security:
+
+Because everything runs on-device, no data ever leaves the user's machine. This makes Foundry Local ideal for enterprise scenarios where data privacy and compliance are critical, such as handling sensitive documents, medical records, or financial data. There are no API calls to external servers, ensuring complete data sovereignty.
+
+Installation and Setup:
+
+For Windows users, the recommended package is foundry-local-sdk-winml, which integrates with the Windows ML runtime for broader hardware support. For cross-platform development, use the standard foundry-local-sdk package. Both packages are available via pip and provide the same API surface area.
+
+The SDK initialization is straightforward: create a Configuration object with an application name, initialize the FoundryLocalManager, and then access the model catalog to download and load models as needed.

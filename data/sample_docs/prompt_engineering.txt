@@ -1,0 +1,33 @@
+Prompt Engineering for RAG-Based Q&A Systems
+
+Prompt engineering is the practice of designing and refining the instructions given to a large language model (LLM) to achieve desired behaviors and output quality. In the context of RAG (Retrieval-Augmented Generation) systems, prompt engineering is critical for ensuring that the model uses retrieved context correctly and does not hallucinate.
+
+System Prompts vs. User Prompts:
+
+In chat-based AI applications, there are typically two types of prompts. The system prompt sets the model's role, behavior guidelines, and constraints. It is usually hidden from the end user and remains constant throughout the conversation. The user prompt contains the actual question or request from the user.
+
+For RAG applications, the system prompt should clearly instruct the model to answer ONLY based on the provided context. It should also define how to handle cases where the context does not contain relevant information — typically by responding with a clear "I don't know" message rather than making up an answer.
+
+Key Techniques for RAG Prompt Engineering:
+
+Technique 1 — Context Injection: Insert the retrieved document chunks directly into the system prompt, clearly delimited from the instructions. Use markers like "Context:" or "Reference Documents:" to separate the knowledge base content from the behavioral instructions.
+
+Technique 2 — Source Citation Instructions: Explicitly instruct the model to cite its sources when answering. For example: "Always reference the source document name in brackets when using information from the context." This makes responses verifiable and builds user trust.
+
+Technique 3 — Fallback Behavior: Define explicit fallback responses for when the context doesn't contain the answer. A well-crafted instruction like "If the context does not contain enough information to answer the question, say: I don't have that information in my knowledge base" prevents the model from guessing or hallucinating.
+
+Technique 4 — Role Definition: Assign the model a specific professional role such as "enterprise knowledge assistant" or "technical support agent." This helps establish the tone and expertise level of responses.
+
+Technique 5 — Output Format Control: Specify how answers should be formatted. For enterprise applications, instructions like "keep answers concise, professional, and well-structured" or "use bullet points for lists" improve readability and consistency.
+
+Common Pitfalls in RAG Prompting:
+
+One common mistake is providing too much context, which can overwhelm smaller models and degrade answer quality. Another pitfall is vague fallback instructions — if the model isn't clearly told what to do when it lacks information, it will attempt to answer anyway, often incorrectly. Additionally, failing to instruct the model to cite sources reduces the trustworthiness of the system.
+
+Temperature and Response Control:
+
+For RAG applications, it is generally recommended to use a low temperature setting (0.1-0.3) to reduce randomness in responses. This ensures that the model stays close to the factual content in the retrieved context rather than generating creative but potentially inaccurate text. Higher temperatures (0.7-1.0) are more suitable for creative writing tasks.
+
+Best Practices Summary:
+
+Always be explicit and specific in your instructions. Test prompts with edge cases including unanswerable questions. Iterate on prompt design based on observed model behavior. Keep the system prompt concise but comprehensive. Use consistent formatting for context injection across all queries. Monitor and log model responses to identify areas for prompt improvement.

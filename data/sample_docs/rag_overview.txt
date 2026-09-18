@@ -1,0 +1,31 @@
+Retrieval-Augmented Generation (RAG): A Complete Overview
+
+Retrieval-Augmented Generation, commonly known as RAG, is an AI design pattern that significantly improves the accuracy and reliability of large language model (LLM) responses by grounding them in external knowledge sources. RAG addresses one of the most critical challenges in AI: hallucination — when models generate plausible-sounding but factually incorrect information.
+
+How RAG Works — The Three-Step Process:
+
+RAG operates through three core steps: Retrieve, Augment, and Generate.
+
+Step 1 — Retrieve: When a user asks a question, the system first searches a curated knowledge base to find the most relevant documents or text passages. This search is typically performed using embedding-based semantic similarity, where both the query and documents are converted into numerical vectors and compared using cosine similarity.
+
+Step 2 — Augment: The retrieved documents are then injected into the LLM's prompt as additional context. This augmented prompt contains both the user's original question and the relevant knowledge base content, giving the model access to specific, verified information.
+
+Step 3 — Generate: The LLM generates its response based on the augmented prompt. Because the model now has access to relevant, factual context, its answers are more accurate, specific, and verifiable. The model can be instructed to cite its sources, further improving transparency.
+
+Benefits of RAG:
+
+RAG provides several key advantages over using LLMs alone. First, it dramatically reduces hallucinations by grounding responses in verified data. Second, it enables domain-specific knowledge without expensive model fine-tuning. Third, it allows the knowledge base to be updated independently of the model, keeping information current. Fourth, it enables source citations, making responses auditable and trustworthy.
+
+Embedding Models and Vector Search:
+
+Text embeddings are numerical vector representations of text that capture semantic meaning. Similar text produces similar vectors, enabling semantic search capabilities. In a RAG system, all documents in the knowledge base are pre-embedded and stored in a vector database. When a user query arrives, it is also embedded, and the system finds the closest matching document vectors using cosine similarity.
+
+Cosine similarity measures the directional alignment between two vectors, regardless of their magnitude. Values range from -1 to 1, where values near 1.0 indicate high semantic similarity. For RAG applications, a typical threshold of 0.3 or higher is used to filter relevant results.
+
+Knowledge Base Design:
+
+Effective RAG systems require thoughtful document preparation. Documents are typically split into smaller chunks of approximately 200-500 words each, with some overlap between consecutive chunks to maintain context continuity. This chunking strategy ensures that retrieved passages are focused and relevant while preserving enough context for coherent answers.
+
+Local vs. Cloud-Based RAG:
+
+RAG can be implemented both in cloud environments and on local devices. Local RAG, as enabled by tools like Microsoft Foundry Local, offers the advantage of complete privacy since no data leaves the device. It also works offline and has no recurring API costs. The trade-off is that local models are typically smaller and may produce less sophisticated responses than large cloud-hosted models.

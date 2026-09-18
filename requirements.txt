@@ -1,0 +1,28 @@
+# ============================================================
+# Foundry RAG Assistant — Python Dependencies
+# ============================================================
+# Install with: pip install -r requirements.txt
+# ============================================================
+
+# Microsoft Foundry Local SDK (Windows variant with WinML)
+# Provides on-device LLM inference with CPU/GPU/NPU acceleration.
+# Use 'foundry-local-sdk' instead on macOS/Linux.
+foundry-local-sdk-winml
+
+# Streamlit — Enterprise dashboard UI framework
+# Used for the chat interface, sidebar stats, and source panel.
+streamlit>=1.35.0
+
+# PyPDF2 — PDF text extraction (optional)
+# Enables ingesting PDF documents into the knowledge base.
+# Can be removed if only using .txt files.
+PyPDF2>=3.0.0
+
+# ============================================================
+# Standard library modules used (no install needed):
+#   - sqlite3   → Local database for chunks & embeddings
+#   - math      → Cosine similarity computation
+#   - json      → Serializing embedding vectors
+#   - os        → File system operations
+#   - pathlib   → Cross-platform path handling
+# ============================================================
