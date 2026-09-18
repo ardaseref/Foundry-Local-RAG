@@ -235,6 +235,28 @@ class RAGPipeline:
         # Step 3: Load the CHAT model
         print(f"[>>] Loading chat model: {CHAT_MODEL}")
         self._chat_model = manager.catalog.get_model(CHAT_MODEL)
+
+        # ---------------------------------------------------------
+        # GPU FIX: Dynamically determine the exact variant ID required
+        # for hardware acceleration instead of guessing strings.
+        # ---------------------------------------------------------
+        gpu_variant = None
+        available_ids = [v.id for v in self._chat_model.variants]
+        print(f"  [DB] Available variants in catalog: {available_ids}")
+        
+        for variant in self._chat_model.variants:
+            v_id_lower = variant.id.lower()
+            # Any variant that isn't the generic CPU fallback is hardware-accelerated
+            if "generic-cpu" not in v_id_lower:
+                gpu_variant = variant
+                break
+                
+        if gpu_variant:
+            print(f"  [>>] Forcing hardware-accelerated variant: {gpu_variant.id}")
+            self._chat_model.select_variant(gpu_variant)
+        else:
+            print("  [WARN] GPU variant not found in catalog. Using default.")
+
         self._chat_model.download(
             lambda p: (_notify("chat_download", p),
                        print(f"\r  [>>] Downloading chat model: {p:.1f}%", end="", flush=True))
