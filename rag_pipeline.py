@@ -37,7 +37,9 @@ from config import (
     CHAT_FREQUENCY_PENALTY,
     CHAT_MAX_TOKENS,
     CHAT_MODEL,
-    CHAT_TEMPERATURE,
+    CHAT_TEMPERATURE_RAG,
+    CHAT_TEMPERATURE_CHAT,
+    CHAT_PRESENCE_PENALTY,
     DB_PATH,
     EMBEDDING_MODEL,
     SIMILARITY_THRESHOLD,
@@ -271,18 +273,9 @@ class RAGPipeline:
         self._chat_model.load()
         self._chat_client = self._chat_model.get_chat_client()
         
-        # ── Configure deterministic generation parameters ─
-        # This is applied at the client level, so every call to
-        # complete_chat / complete_streaming_chat automatically
-        # uses these settings — no per-call arguments needed.
-        self._chat_client.settings = ChatClientSettings(
-            temperature=CHAT_TEMPERATURE,
-            max_tokens=CHAT_MAX_TOKENS,
-            frequency_penalty=CHAT_FREQUENCY_PENALTY,
-        )
-        print(f"  [OK] Chat model ready! "
-              f"(temp={CHAT_TEMPERATURE}, max_tokens={CHAT_MAX_TOKENS}, "
-              f"freq_penalty={CHAT_FREQUENCY_PENALTY})")
+        # Generation parameters are now configured dynamically per query 
+        # (in query and query_stream) based on whether it is a RAG or Casual chat.
+        print("  [OK] Chat model ready!")
 
         self._is_initialized = True
 
@@ -504,6 +497,47 @@ class RAGPipeline:
             {"role": "user", "content": query}
         ]
 
+    def _safe_stream(self, raw_stream):
+        """
+        Programmatic Safety Net: Intercepts the streaming response and forcefully
+        stops generation if it detects prompt bleed or degenerate loops.
+        """
+        buffer = ""
+        for chunk in raw_stream:
+            if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
+                content = chunk.choices[0].delta.content
+                if content:
+                    buffer += content
+                    
+                    # 1. Prompt Bleed Detection (Model regurgitating instructions)
+                    if "Context:" in buffer or "Reference material:" in buffer:
+                        break
+                    if "You are a knowledgeable assistant" in buffer or "You are a helpful" in buffer:
+                        break
+                        
+                    # 2. Advanced N-gram Degenerate Loop Detection
+                    # Detects repeating single words OR multi-word phrases (e.g., "açık açık açık" 
+                    # or "NASA'un raporu NASA'un raporu NASA'un raporu")
+                    words = buffer.split()
+                    
+                    # We check for sequences of length 1 to 6 words
+                    # If any sequence repeats 3 times consecutively at the end, we kill the stream.
+                    loop_detected = False
+                    for n in range(1, 7):
+                        if len(words) >= 3 * n:
+                            seq1 = words[-n:]
+                            seq2 = words[-2*n:-n]
+                            seq3 = words[-3*n:-2*n]
+                            
+                            if seq1 == seq2 and seq2 == seq3:
+                                loop_detected = True
+                                break
+                                
+                    if loop_detected:
+                        break
+                            
+                    yield content
+
     # ──────────────────────────────────────────────────────
     # GENERATION: Get answers from the local LLM
     # ──────────────────────────────────────────────────────
@@ -511,25 +545,6 @@ class RAGPipeline:
     def query(self, question: str, top_k: int = TOP_K) -> RAGResponse:
         """
         Execute a full RAG query: Retrieve -> Augment -> Generate.
-
-        This is the main entry point for asking questions. It:
-          1. Retrieves relevant chunks from the knowledge base
-          2. Builds an augmented prompt with context and citations
-          3. Sends the prompt to the local LLM for answer generation
-          4. Returns the answer along with source references
-
-        If no relevant chunks are found, the model is instructed
-        to explicitly say it doesn't have the information.
-
-        Args:
-            question: The user's question text
-            top_k:    Number of context chunks to retrieve (default from config)
-
-        Returns:
-            A RAGResponse object containing:
-              - answer:  The generated text answer
-              - sources: The retrieved chunks used as context
-              - query:   The original question
         """
         if not self._is_initialized:
             raise RuntimeError("Pipeline not initialized. Call initialize() first.")
@@ -540,21 +555,27 @@ class RAGPipeline:
         # ── AUGMENT: Build the prompt with context ────────
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
+            temp = CHAT_TEMPERATURE_RAG
         else:
-            # No chunks passed the similarity threshold.
-            # Pass EMPTY context so the system prompt's "chat normally" rule activates.
             context = ""
+            temp = CHAT_TEMPERATURE_CHAT
 
         messages = self._build_messages(question, context)
+        
+        # ── DYNAMIC SETTINGS ──────────────────────────────
+        # Do not pass frequency_penalty or presence_penalty if they are 0.0.
+        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
+        # (returns an empty stream) in some SDK versions.
+        self._chat_client.settings = ChatClientSettings(
+            temperature=temp,
+            max_tokens=CHAT_MAX_TOKENS,
+        )
 
         # ── GENERATE: Get answer from local LLM ──────────
-        # Use streaming to collect the full response token-by-token
         answer_parts = []
-        for chunk in self._chat_client.complete_streaming_chat(messages):
-            if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
-                content = chunk.choices[0].delta.content
-                if content:
-                    answer_parts.append(content)
+        raw_stream = self._chat_client.complete_streaming_chat(messages)
+        for content in self._safe_stream(raw_stream):
+            answer_parts.append(content)
 
         full_answer = "".join(answer_parts)
 
@@ -567,26 +588,6 @@ class RAGPipeline:
     def query_stream(self, question: str, top_k: int = TOP_K):
         """
         Execute a RAG query with STREAMING response.
-
-        This is the preferred method for the Streamlit UI because
-        it yields answer tokens one at a time, creating a smooth
-        "typing" effect as the model generates its response.
-
-        The method yields tuples of (token, sources) where:
-          - token:   A small piece of the answer text (str or None)
-          - sources: The full list of retrieved chunks (sent with first token)
-
-        Usage in Streamlit:
-            for token, sources in pipeline.query_stream("question"):
-                if token:
-                    display_token(token)
-
-        Args:
-            question: The user's question text
-            top_k:    Number of context chunks to retrieve
-
-        Yields:
-            Tuples of (token: str | None, sources: list[RetrievedChunk])
         """
         if not self._is_initialized:
             raise RuntimeError("Pipeline not initialized. Call initialize() first.")
@@ -597,24 +598,31 @@ class RAGPipeline:
         # ── AUGMENT: Build the prompt with context ────────
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
+            temp = CHAT_TEMPERATURE_RAG
         else:
-            # Empty context triggers the "chat normally" system prompt behavior
             context = ""
+            temp = CHAT_TEMPERATURE_CHAT
 
         messages = self._build_messages(question, context)
+        
+        # ── DYNAMIC SETTINGS ──────────────────────────────
+        # Do not pass frequency_penalty or presence_penalty if they are 0.0.
+        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
+        # (returns an empty stream) in some SDK versions.
+        self._chat_client.settings = ChatClientSettings(
+            temperature=temp,
+            max_tokens=CHAT_MAX_TOKENS,
+        )
 
         # ── GENERATE: Stream answer tokens from local LLM ─
         first_token = True
-        for chunk in self._chat_client.complete_streaming_chat(messages):
-            if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
-                content = chunk.choices[0].delta.content
-                if content:
-                    if first_token:
-                        # Send sources with the first token
-                        yield content, relevant_chunks
-                        first_token = False
-                    else:
-                        yield content, []
+        raw_stream = self._chat_client.complete_streaming_chat(messages)
+        for content in self._safe_stream(raw_stream):
+            if first_token:
+                yield content, relevant_chunks
+                first_token = False
+            else:
+                yield content, []
 
     # ──────────────────────────────────────────────────────
     # UTILITY METHODS
