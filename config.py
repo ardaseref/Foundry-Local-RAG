@@ -60,31 +60,62 @@ TOP_K = 3
 SIMILARITY_THRESHOLD = 0.55
 
 # ──────────────────────────────────────────────────────────
-# 5. SYSTEM PROMPT — STRICT ENTERPRISE RAG BEHAVIOR
+# 5. SYSTEM PROMPTS — TWO-PROMPT ARCHITECTURE
 # ──────────────────────────────────────────────────────────
-# This prompt is intentionally SHORT and directive to prevent
-# small models (Phi-3.5-mini, Qwen) from hallucinating extra
-# turns, inventing document tags, or simulating conversations.
-SYSTEM_PROMPT_TEMPLATE = """You are a highly efficient enterprise AI assistant.
+# Instead of one prompt with If/Else logic (which overwhelms
+# small models), we use TWO separate prompts selected at
+# runtime based on whether retrieved context exists.
+#
+# CRITICAL DESIGN RULE:
+#   SYSTEM_PROMPT_CHAT must contain ZERO mentions of
+#   "context", "sources", "knowledge base", or "documents".
+#   This prevents the model from hallucinating fake sources
+#   during casual conversation.
+# ──────────────────────────────────────────────────────────
 
-CRITICAL RULES:
-1. LANGUAGE: ALWAYS respond in the exact same language the user used (e.g., if Turkish, respond in Turkish).
-2. DIRECTNESS: NEVER explain your internal rules. NEVER use parentheses to say "I don't have a source" or "I am chatting normally". Just give the direct, natural answer and stop.
+# ── 5a. CASUAL CHAT (no relevant documents found) ────────
+# Used when the similarity search returns no chunks above
+# the threshold. The model acts as a simple friendly assistant.
+SYSTEM_PROMPT_CHAT = """You are a friendly and helpful AI assistant.
+Always respond in the same language the user writes in.
+Give one concise, direct answer and then stop.
+Do not generate follow-up questions.
+Do not simulate a conversation."""
 
-Context:
-{context}
+# ── 5b. RAG GROUNDED ANSWERING (documents found) ─────────
+# Used when relevant chunks are retrieved from the knowledge base.
+# The {context} placeholder is filled with labeled source chunks.
+SYSTEM_PROMPT_RAG = """You are a precise AI assistant that answers questions using ONLY the provided reference material.
 
-Instructions based on the context above:
-- If the context is empty, chat normally and politely with the user. Do NOT mention a knowledge base, rules, or lack of sources.
-- If context is provided, answer the user's question using ONLY that context. Cite the source filename.
-- If context is provided but does not contain the answer, say you don't know — in the user's language.
-- Do NOT simulate a conversation. Do NOT generate follow-up questions.
-- Give ONE concise answer, then STOP.
-"""
+Rules:
+1. Answer using ONLY the reference material below. Do not add outside knowledge.
+2. Cite the source filename in your answer.
+3. If the reference material does not contain the answer, respond with exactly: "I do not have information about this topic." Do not translate this sentence. Do not add anything else.
+4. Always respond in the same language the user writes in.
+5. Give one concise answer and then stop.
 
+Reference material:
+{context}"""
 
 # ──────────────────────────────────────────────────────────
-# 6. STREAMLIT UI CONFIGURATION
+# 6. GENERATION PARAMETERS — DETERMINISTIC OUTPUT
+# ──────────────────────────────────────────────────────────
+# These are applied to the Foundry SDK's ChatClientSettings
+# to enforce deterministic, bounded generation.
+#
+# temperature=0.0  → Greedy decoding; absolute determinism
+# max_tokens=256   → Hard ceiling prevents runaway loops
+#                    (a concise RAG answer fits in ~150 tokens;
+#                     256 allows headroom without letting loops
+#                     burn 500 tokens of garbage)
+# frequency_penalty=0.3 → Penalizes repeated tokens directly
+# ──────────────────────────────────────────────────────────
+CHAT_TEMPERATURE = 0.0
+CHAT_MAX_TOKENS = 256
+CHAT_FREQUENCY_PENALTY = 0.3
+
+# ──────────────────────────────────────────────────────────
+# 7. STREAMLIT UI CONFIGURATION
 # ──────────────────────────────────────────────────────────
 # Page title shown in the browser tab
 PAGE_TITLE = "Foundry RAG Assistant"

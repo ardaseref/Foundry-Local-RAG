@@ -29,15 +29,20 @@ from dataclasses import dataclass, field
 
 # Foundry Local SDK -- Microsoft's on-device AI runtime
 from foundry_local_sdk import Configuration, FoundryLocalManager
+from foundry_local_sdk.openai.chat_client import ChatClientSettings
 
 # Import our centralized configuration
 from config import (
     APP_NAME,
+    CHAT_FREQUENCY_PENALTY,
+    CHAT_MAX_TOKENS,
     CHAT_MODEL,
+    CHAT_TEMPERATURE,
     DB_PATH,
     EMBEDDING_MODEL,
     SIMILARITY_THRESHOLD,
-    SYSTEM_PROMPT_TEMPLATE,
+    SYSTEM_PROMPT_CHAT,
+    SYSTEM_PROMPT_RAG,
     TOP_K,
 )
 
@@ -265,7 +270,19 @@ class RAGPipeline:
         _notify("chat_load")
         self._chat_model.load()
         self._chat_client = self._chat_model.get_chat_client()
-        print("  [OK] Chat model ready!")
+        
+        # ── Configure deterministic generation parameters ─
+        # This is applied at the client level, so every call to
+        # complete_chat / complete_streaming_chat automatically
+        # uses these settings — no per-call arguments needed.
+        self._chat_client.settings = ChatClientSettings(
+            temperature=CHAT_TEMPERATURE,
+            max_tokens=CHAT_MAX_TOKENS,
+            frequency_penalty=CHAT_FREQUENCY_PENALTY,
+        )
+        print(f"  [OK] Chat model ready! "
+              f"(temp={CHAT_TEMPERATURE}, max_tokens={CHAT_MAX_TOKENS}, "
+              f"freq_penalty={CHAT_FREQUENCY_PENALTY})")
 
         self._is_initialized = True
 
@@ -453,9 +470,14 @@ class RAGPipeline:
         """
         Construct the chat messages array for the LLM.
 
-        The messages follow the standard chat completion format:
-          - SYSTEM message: Sets the AI's role, rules, and context
-          - USER message: Contains the actual question
+        Uses a TWO-PROMPT architecture instead of a single template
+        with If/Else logic:
+          - NO context → SYSTEM_PROMPT_CHAT  (zero RAG vocabulary)
+          - HAS context → SYSTEM_PROMPT_RAG  (grounded answering)
+
+        This prevents the small model from seeing RAG-related words
+        ("sources", "context", "documents") during casual chat,
+        which was the primary cause of hallucinated source citations.
 
         The system prompt uses our strict enterprise template from
         config.py, which enforces:
@@ -470,8 +492,12 @@ class RAGPipeline:
         Returns:
             A list of message dicts ready for the chat API
         """
-        # Inject the retrieved context into our system prompt template
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(context=context)
+        if context and context.strip():
+            # RAG path: inject retrieved documents into the grounded prompt
+            system_prompt = SYSTEM_PROMPT_RAG.format(context=context)
+        else:
+            # Casual chat path: clean prompt with zero RAG vocabulary
+            system_prompt = SYSTEM_PROMPT_CHAT
 
         return [
             {"role": "system", "content": system_prompt},
