@@ -35,9 +35,12 @@ from foundry_local_sdk.openai.chat_client import ChatClientSettings
 # Import our centralized configuration
 from config import (
     APP_NAME,
+    CHAT_FREQUENCY_PENALTY,
     CHAT_MAX_TOKENS,
     CHAT_MODEL,
-    CHAT_TEMPERATURE,
+    CHAT_TEMPERATURE_RAG,
+    CHAT_TEMPERATURE_CHAT,
+    CHAT_PRESENCE_PENALTY,
     DB_PATH,
     EMBEDDING_MODEL,
     SIMILARITY_THRESHOLD,
@@ -495,12 +498,6 @@ class RAGPipeline:
         if context and context.strip():
             # RAG path: inject retrieved documents into the grounded prompt
             system_prompt = SYSTEM_PROMPT_RAG.format(context=context)
-            
-            # Fix 1: Language-Aware Response Strategy
-            # Detect Turkish characters or common question words to anchor the model
-            lower_query = query.lower()
-            if any(tr_char in lower_query for tr_char in ['ş', 'ğ', 'ı', 'ö', 'ü', 'ç']) or any(word in lower_query for word in ['nedir', 'nasıl', 'anlat', 'merhaba']):
-                query = f"Lütfen aşağıdaki soruya Türkçe yanıt ver:\n\nSoru: {query}"
         else:
             # Casual chat path: clean prompt with zero RAG vocabulary
             system_prompt = SYSTEM_PROMPT_CHAT
@@ -509,6 +506,47 @@ class RAGPipeline:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": query}
         ]
+
+    def _safe_stream(self, raw_stream):
+        """
+        Programmatic Safety Net: Intercepts the streaming response and forcefully
+        stops generation if it detects prompt bleed or degenerate loops.
+        """
+        buffer = ""
+        for chunk in raw_stream:
+            if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
+                content = chunk.choices[0].delta.content
+                if content:
+                    buffer += content
+                    
+                    # 1. Prompt Bleed Detection (Model regurgitating instructions)
+                    if "Context:" in buffer or "Reference material:" in buffer:
+                        break
+                    if "You are a knowledgeable assistant" in buffer or "You are a helpful" in buffer:
+                        break
+                        
+                    # 2. Advanced N-gram Degenerate Loop Detection
+                    # Detects repeating single words OR multi-word phrases (e.g., "açık açık açık" 
+                    # or "NASA'un raporu NASA'un raporu NASA'un raporu")
+                    words = buffer.split()
+                    
+                    # We check for sequences of length 1 to 6 words
+                    # If any sequence repeats 3 times consecutively at the end, we kill the stream.
+                    loop_detected = False
+                    for n in range(1, 7):
+                        if len(words) >= 3 * n:
+                            seq1 = words[-n:]
+                            seq2 = words[-2*n:-n]
+                            seq3 = words[-3*n:-2*n]
+                            
+                            if seq1 == seq2 and seq2 == seq3:
+                                loop_detected = True
+                                break
+                                
+                    if loop_detected:
+                        break
+                            
+                    yield content
 
     # ──────────────────────────────────────────────────────
     # GENERATION: Get answers from the local LLM
@@ -544,24 +582,31 @@ class RAGPipeline:
         relevant_chunks = self.get_top_chunks(question, top_k=top_k)
 
         # ── AUGMENT: Build the prompt with context ────────
-        is_chat_mode = False
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
         else:
             # No chunks passed the similarity threshold.
             # Pass EMPTY context so the system prompt's "chat normally" rule activates.
             context = ""
+            temp = CHAT_TEMPERATURE_CHAT
 
         messages = self._build_messages(question, context)
+        
+        # ── DYNAMIC SETTINGS ──────────────────────────────
+        # Do not pass frequency_penalty or presence_penalty if they are 0.0.
+        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
+        # (returns an empty stream) in some SDK versions.
+        self._chat_client.settings = ChatClientSettings(
+            temperature=temp,
+            max_tokens=CHAT_MAX_TOKENS,
+        )
 
         # ── GENERATE: Get answer from local LLM ──────────
         # Use streaming to collect the full response token-by-token
         answer_parts = []
-        for chunk in self._chat_client.complete_streaming_chat(messages):
-            if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
-                content = chunk.choices[0].delta.content
-                if content:
-                    answer_parts.append(content)
+        raw_stream = self._chat_client.complete_streaming_chat(messages)
+        for content in self._safe_stream(raw_stream):
+            answer_parts.append(content)
 
         full_answer = "".join(answer_parts)
 
@@ -602,27 +647,33 @@ class RAGPipeline:
         relevant_chunks = self.get_top_chunks(question, top_k=top_k)
 
         # ── AUGMENT: Build the prompt with context ────────
-        is_chat_mode = False
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
         else:
             # Empty context triggers the "chat normally" system prompt behavior
             context = ""
+            temp = CHAT_TEMPERATURE_CHAT
 
         messages = self._build_messages(question, context)
+        
+        # ── DYNAMIC SETTINGS ──────────────────────────────
+        # Do not pass frequency_penalty or presence_penalty if they are 0.0.
+        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
+        # (returns an empty stream) in some SDK versions.
+        self._chat_client.settings = ChatClientSettings(
+            temperature=temp,
+            max_tokens=CHAT_MAX_TOKENS,
+        )
 
         # ── GENERATE: Stream answer tokens from local LLM ─
         first_token = True
-        for chunk in self._chat_client.complete_streaming_chat(messages):
-            if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
-                content = chunk.choices[0].delta.content
-                if content:
-                    if first_token:
-                        # Send sources with the first token
-                        yield content, relevant_chunks
-                        first_token = False
-                    else:
-                        yield content, []
+        raw_stream = self._chat_client.complete_streaming_chat(messages)
+        for content in self._safe_stream(raw_stream):
+            if first_token:
+                yield content, relevant_chunks
+                first_token = False
+            else:
+                yield content, []
 
     # ──────────────────────────────────────────────────────
     # UTILITY METHODS
