@@ -87,6 +87,7 @@ Always respond in the same language the user writes in."""
 SYSTEM_PROMPT_RAG = """You are a knowledgeable assistant.
 Answer the user's question using ONLY the context provided below.
 If the answer is not in the context, say "I cannot answer this based on the provided context."
+Always respond in the same language the user writes in.
 
 Context:
 {context}"""
