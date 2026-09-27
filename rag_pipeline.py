@@ -22,7 +22,6 @@ Author:  Enterprise RAG Assistant Project
 ============================================================
 """
 
-from config import CHAT_FREQUENCY_PENALTY
 import json
 import math
 import sqlite3
@@ -38,9 +37,7 @@ from config import (
     CHAT_FREQUENCY_PENALTY,
     CHAT_MAX_TOKENS,
     CHAT_MODEL,
-    CHAT_TEMPERATURE_RAG,
-    CHAT_TEMPERATURE_CHAT,
-    CHAT_PRESENCE_PENALTY,
+    CHAT_TEMPERATURE,
     DB_PATH,
     EMBEDDING_MODEL,
     SIMILARITY_THRESHOLD,
@@ -278,11 +275,17 @@ class RAGPipeline:
         # This is applied at the client level, so every call to
         # complete_chat / complete_streaming_chat automatically
         # uses these settings — no per-call arguments needed.
-        self._chat_client.settings = ChatClientSettings(
-            temperature=CHAT_TEMPERATURE,
-            max_tokens=CHAT_MAX_TOKENS,
-            frequency_penalty=CHAT_FREQUENCY_PENALTY,
-        )
+        settings_kwargs = {
+            "temperature": CHAT_TEMPERATURE,
+            "max_tokens": CHAT_MAX_TOKENS,
+        }
+        
+        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
+        # (returns an empty stream) in some SDK versions.
+        if CHAT_FREQUENCY_PENALTY != 0.0:
+            settings_kwargs["frequency_penalty"] = CHAT_FREQUENCY_PENALTY
+            
+        self._chat_client.settings = ChatClientSettings(**settings_kwargs)
         print(f"  [OK] Chat model ready! "
               f"(temp={CHAT_TEMPERATURE}, max_tokens={CHAT_MAX_TOKENS}, "
               f"freq_penalty={CHAT_FREQUENCY_PENALTY})")
@@ -498,6 +501,11 @@ class RAGPipeline:
         if context and context.strip():
             # RAG path: inject retrieved documents into the grounded prompt
             system_prompt = SYSTEM_PROMPT_RAG.format(context=context)
+            
+            # Fix 1: Language-Aware Response Strategy
+            lower_query = query.lower()
+            if any(tr_char in lower_query for tr_char in ['ş', 'ğ', 'ı', 'ö', 'ü', 'ç']) or any(word in lower_query for word in ['nedir', 'nasıl', 'anlat', 'merhaba']):
+                query = f"Lütfen aşağıdaki soruya Türkçe yanıt ver:\n\nSoru: {query}"
         else:
             # Casual chat path: clean prompt with zero RAG vocabulary
             system_prompt = SYSTEM_PROMPT_CHAT
@@ -507,10 +515,11 @@ class RAGPipeline:
             {"role": "user", "content": query}
         ]
 
-    def _safe_stream(self, raw_stream):
+    def _safe_stream(self, raw_stream, is_chat_mode: bool = False):
         """
         Programmatic Safety Net: Intercepts the streaming response and forcefully
         stops generation if it detects prompt bleed or degenerate loops.
+        Also applies strict output limits and jailbreak detection when in casual chat mode.
         """
         buffer = ""
         for chunk in raw_stream:
@@ -519,20 +528,41 @@ class RAGPipeline:
                 if content:
                     buffer += content
                     
-                    # 1. Prompt Bleed Detection (Model regurgitating instructions)
-                    if "Context:" in buffer or "Reference material:" in buffer:
-                        break
-                    if "You are a knowledgeable assistant" in buffer or "You are a helpful" in buffer:
+                    # 1. Prompt Bleed Detection
+                    lower_buf = buffer.lower()
+                    forbidden_phrases = [
+                        "helpful enterprise ai", 
+                        "routing assistant", 
+                        "strict data extraction",
+                        "the language the user wrote in"
+                    ]
+                    if any(phrase in lower_buf for phrase in forbidden_phrases):
+                        yield "\n\n[Security: System prompt bleed detected and blocked.]"
                         break
                         
-                    # 2. Advanced N-gram Degenerate Loop Detection
-                    # Detects repeating single words OR multi-word phrases (e.g., "açık açık açık" 
-                    # or "NASA'un raporu NASA'un raporu NASA'un raporu")
+                    # 2. Programmatic Hallucination & Jailbreak Guards (Chat Mode Only)
+                    if is_chat_mode:
+                        # Prevent writing poems / creative overrides
+                        if "poem" in lower_buf or "verse" in lower_buf or "oh jupiter" in lower_buf:
+                            yield "\n\n[Security: Creative generation blocked in Enterprise Mode]"
+                            break
+                            
+                        # Prevent 'However, I can provide...' pattern when RAG misses
+                        if "however, i can provide" in lower_buf or "based on common knowledge" in lower_buf or "general understanding" in lower_buf:
+                            yield "\n\n[Security: External knowledge injection blocked]"
+                            break
+                            
+                        # Prevent long rambling essays (hallucination indicator)
+                        words = buffer.split()
+                        if len(words) > 40:
+                            yield " ... [Response truncated.]"
+                            break
+
+                    # 3. Advanced N-gram Degenerate Loop Detection
                     words = buffer.split()
-                    
-                    # We check for sequences of length 1 to 6 words
-                    # If any sequence repeats 3 times consecutively at the end, we kill the stream.
                     loop_detected = False
+                    
+                    # 3a. Exact word sequence repetition
                     for n in range(1, 7):
                         if len(words) >= 3 * n:
                             seq1 = words[-n:]
@@ -543,7 +573,21 @@ class RAGPipeline:
                                 loop_detected = True
                                 break
                                 
+                    # 3b. Semantic sentence repetition (Catches Turkish variations)
+                    if not loop_detected:
+                        import re
+                        sentences = [s.strip() for s in re.split(r'[.!?\n]+', buffer) if len(s.strip()) > 15]
+                        if len(sentences) >= 4:
+                            last_sent_words = set(sentences[-1].lower().split())
+                            prev_sent_words = set(sentences[-2].lower().split())
+                            if last_sent_words and prev_sent_words:
+                                intersection = last_sent_words.intersection(prev_sent_words)
+                                union = last_sent_words.union(prev_sent_words)
+                                if (len(intersection) / len(union)) > 0.85:
+                                    loop_detected = True
+                                
                     if loop_detected:
+                        yield "..."
                         break
                             
                     yield content
@@ -582,30 +626,23 @@ class RAGPipeline:
         relevant_chunks = self.get_top_chunks(question, top_k=top_k)
 
         # ── AUGMENT: Build the prompt with context ────────
+        is_chat_mode = False
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
         else:
-            # No chunks passed the similarity threshold.
-            # Pass EMPTY context so the system prompt's "chat normally" rule activates.
+            # Empty context triggers the "chat normally" system prompt behavior
             context = ""
-            temp = CHAT_TEMPERATURE_CHAT
+            is_chat_mode = True
 
         messages = self._build_messages(question, context)
         
-        # ── DYNAMIC SETTINGS ──────────────────────────────
-        # Do not pass frequency_penalty or presence_penalty if they are 0.0.
-        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
-        # (returns an empty stream) in some SDK versions.
-        self._chat_client.settings = ChatClientSettings(
-            temperature=temp,
-            max_tokens=CHAT_MAX_TOKENS,
-        )
+        # Generation settings are already globally defined in initialize()
 
         # ── GENERATE: Get answer from local LLM ──────────
         # Use streaming to collect the full response token-by-token
         answer_parts = []
         raw_stream = self._chat_client.complete_streaming_chat(messages)
-        for content in self._safe_stream(raw_stream):
+        for content in self._safe_stream(raw_stream, is_chat_mode=is_chat_mode):
             answer_parts.append(content)
 
         full_answer = "".join(answer_parts)
@@ -647,28 +684,22 @@ class RAGPipeline:
         relevant_chunks = self.get_top_chunks(question, top_k=top_k)
 
         # ── AUGMENT: Build the prompt with context ────────
+        is_chat_mode = False
         if relevant_chunks:
             context = self._build_context_string(relevant_chunks)
         else:
             # Empty context triggers the "chat normally" system prompt behavior
             context = ""
-            temp = CHAT_TEMPERATURE_CHAT
+            is_chat_mode = True
 
         messages = self._build_messages(question, context)
         
-        # ── DYNAMIC SETTINGS ──────────────────────────────
-        # Do not pass frequency_penalty or presence_penalty if they are 0.0.
-        # Passing 0.0 to the underlying ONNX runtime causes a silent failure 
-        # (returns an empty stream) in some SDK versions.
-        self._chat_client.settings = ChatClientSettings(
-            temperature=temp,
-            max_tokens=CHAT_MAX_TOKENS,
-        )
+        # Generation settings are already globally defined in initialize()
 
         # ── GENERATE: Stream answer tokens from local LLM ─
         first_token = True
         raw_stream = self._chat_client.complete_streaming_chat(messages)
-        for content in self._safe_stream(raw_stream):
+        for content in self._safe_stream(raw_stream, is_chat_mode=is_chat_mode):
             if first_token:
                 yield content, relevant_chunks
                 first_token = False

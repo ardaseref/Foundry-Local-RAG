@@ -76,18 +76,18 @@ SIMILARITY_THRESHOLD = 0.55
 # ── 5a. CASUAL CHAT (no relevant documents found) ────────
 # Used when the similarity search returns no chunks above
 # the threshold. The model acts as a simple friendly assistant.
-SYSTEM_PROMPT_CHAT = """You are a friendly and helpful AI assistant.
-Always respond in the same language the user writes in.
-Give one concise, direct answer and then stop.
-Do not generate follow-up questions.
-Do not simulate a conversation."""
+SYSTEM_PROMPT_CHAT = """You are a helpful Enterprise AI routing assistant.
+Your task is to politely greet the user and ask how you can help them.
+Keep your response to a single, brief sentence.
+Always respond in the language the user wrote in."""
 
 # ── 5b. RAG GROUNDED ANSWERING (documents found) ─────────
 # Used when relevant chunks are retrieved from the knowledge base.
 # The {context} placeholder is filled with labeled source chunks.
-SYSTEM_PROMPT_RAG = """You are a knowledgeable assistant.
-Answer the user's question using ONLY the context provided below.
-If the answer is not in the context, say "I cannot answer this based on the provided context."
+SYSTEM_PROMPT_RAG = """You are a strict data extraction assistant.
+Extract the answer to the user's question using ONLY the provided context.
+If the context lacks the answer, say "I cannot answer this based on the provided context."
+Always respond in the language the user wrote in.
 
 Context:
 {context}"""
@@ -105,9 +105,9 @@ Context:
 #                     burn 500 tokens of garbage)
 # frequency_penalty=0.3 → Penalizes repeated tokens directly
 # ──────────────────────────────────────────────────────────
-CHAT_TEMPERATURE = 0.0
-CHAT_MAX_TOKENS = 256
-CHAT_FREQUENCY_PENALTY = 0.3
+CHAT_TEMPERATURE = 0.1
+CHAT_MAX_TOKENS = 512
+CHAT_FREQUENCY_PENALTY = 0.0
 
 # ──────────────────────────────────────────────────────────
 # 7. STREAMLIT UI CONFIGURATION
