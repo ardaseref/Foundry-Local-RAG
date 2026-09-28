@@ -472,28 +472,18 @@ class RAGPipeline:
             )
         return "\n\n".join(context_parts)
 
-    def _build_messages(self, query: str, context: str) -> list[dict]:
+    def _build_messages(self, query: str, context: str, chat_history: list = None) -> list[dict]:
         """
-        Construct the chat messages array for the LLM.
+        Construct the message list for the chat API.
 
-        Uses a TWO-PROMPT architecture instead of a single template
-        with If/Else logic:
+        This implements our two-prompt architecture:
           - NO context → SYSTEM_PROMPT_CHAT  (zero RAG vocabulary)
           - HAS context → SYSTEM_PROMPT_RAG  (grounded answering)
-
-        This prevents the small model from seeing RAG-related words
-        ("sources", "context", "documents") during casual chat,
-        which was the primary cause of hallucinated source citations.
-
-        The system prompt uses our strict enterprise template from
-        config.py, which enforces:
-          - Answer ONLY from context
-          - Cite sources
-          - Say "I don't know" when info is missing
 
         Args:
             query:   The user's question
             context: The formatted context string from retrieved chunks
+            chat_history: Optional list of previous message dicts
 
         Returns:
             A list of message dicts ready for the chat API
@@ -501,102 +491,134 @@ class RAGPipeline:
         if context and context.strip():
             # RAG path: inject retrieved documents into the grounded prompt
             system_prompt = SYSTEM_PROMPT_RAG.format(context=context)
-            
-            # Fix 1: Language-Aware Response Strategy
-            lower_query = query.lower()
-            if any(tr_char in lower_query for tr_char in ['ş', 'ğ', 'ı', 'ö', 'ü', 'ç']) or any(word in lower_query for word in ['nedir', 'nasıl', 'anlat', 'merhaba']):
-                query = f"Lütfen aşağıdaki soruya Türkçe yanıt ver:\n\nSoru: {query}"
         else:
             # Casual chat path: clean prompt with zero RAG vocabulary
             system_prompt = SYSTEM_PROMPT_CHAT
 
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
-        ]
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        if chat_history:
+            messages.extend(chat_history)
+            
+        # Ensure the current query is the final message if not already included
+        if not chat_history or chat_history[-1].get("content") != query:
+            messages.append({"role": "user", "content": query})
+
+        return messages
 
     def _safe_stream(self, raw_stream, is_chat_mode: bool = False):
         """
         Programmatic Safety Net: Intercepts the streaming response and forcefully
-        stops generation if it detects prompt bleed or degenerate loops.
-        Also applies strict output limits and jailbreak detection when in casual chat mode.
+        stops generation if it detects prompt bleed, degenerate loops, or
+        vocabulary stagnation.
         """
+        import re
         buffer = ""
+        in_think_block = False
+        think_block_ended = False
+        
+        # Phrases from our system prompts — if the model outputs these,
+        # it's regurgitating its own instructions (prompt bleed).
+        forbidden_phrases = [
+            "factual answering assistant",
+            "use only facts stated",
+            "do not add outside knowledge",
+            "respond exactly:",
+            "helpful ai assistant",
+            "1-3 sentences maximum",
+            "respond in the same language",
+        ]
+        
         for chunk in raw_stream:
             if chunk.choices and len(chunk.choices) > 0 and hasattr(chunk.choices[0], 'delta'):
                 content = chunk.choices[0].delta.content
                 if content:
                     buffer += content
                     
-                    # 1. Prompt Bleed Detection
+                    # --- Reasoning Tag Filtering Logic ---
+                    if "<think>" in buffer and not in_think_block:
+                        in_think_block = True
+                        
+                    if in_think_block and "</think>" in buffer:
+                        in_think_block = False
+                        # We just ended the block. Extract the remainder.
+                        after_think = buffer.split("</think>", 1)[-1].strip()
+                        # Reset the buffer to just the text after the think block
+                        buffer = after_think
+                        # Yield the remaining text that was after the block immediately
+                        if after_think:
+                            yield after_think
+                        continue
+                        
+                    if in_think_block:
+                        # We are inside the reasoning block. Don't yield, don't run guards.
+                        continue
+                    # -------------------------------------
+                    
                     lower_buf = buffer.lower()
-                    forbidden_phrases = [
-                        "helpful enterprise ai", 
-                        "routing assistant", 
-                        "strict data extraction",
-                        "the language the user wrote in"
-                    ]
+                    
+                    # 1. Prompt Bleed Detection
                     if any(phrase in lower_buf for phrase in forbidden_phrases):
-                        yield "\n\n[Security: System prompt bleed detected and blocked.]"
                         break
                         
-                    # 2. Programmatic Hallucination & Jailbreak Guards (Chat Mode Only)
+                    # 2. Chat Mode Length Guard
                     if is_chat_mode:
-                        # Prevent writing poems / creative overrides
-                        if "poem" in lower_buf or "verse" in lower_buf or "oh jupiter" in lower_buf:
-                            yield "\n\n[Security: Creative generation blocked in Enterprise Mode]"
-                            break
-                            
-                        # Prevent 'However, I can provide...' pattern when RAG misses
-                        if "however, i can provide" in lower_buf or "based on common knowledge" in lower_buf or "general understanding" in lower_buf:
-                            yield "\n\n[Security: External knowledge injection blocked]"
-                            break
-                            
-                        # Prevent long rambling essays (hallucination indicator)
                         words = buffer.split()
-                        if len(words) > 40:
-                            yield " ... [Response truncated.]"
+                        if len(words) > 60:
+                            yield "..."
                             break
 
-                    # 3. Advanced N-gram Degenerate Loop Detection
+                    # 3. N-gram Loop Detection
                     words = buffer.split()
                     loop_detected = False
                     
-                    # 3a. Exact word sequence repetition
+                    # 3a. Exact word sequence repetition (n=1..6, repeats 3x)
                     for n in range(1, 7):
                         if len(words) >= 3 * n:
                             seq1 = words[-n:]
                             seq2 = words[-2*n:-n]
                             seq3 = words[-3*n:-2*n]
-                            
                             if seq1 == seq2 and seq2 == seq3:
                                 loop_detected = True
                                 break
                                 
-                    # 3b. Semantic sentence repetition (Catches Turkish variations)
+                    # 3b. Semantic sentence repetition (Jaccard > 0.80)
                     if not loop_detected:
-                        import re
-                        sentences = [s.strip() for s in re.split(r'[.!?\n]+', buffer) if len(s.strip()) > 15]
-                        if len(sentences) >= 4:
-                            last_sent_words = set(sentences[-1].lower().split())
-                            prev_sent_words = set(sentences[-2].lower().split())
-                            if last_sent_words and prev_sent_words:
-                                intersection = last_sent_words.intersection(prev_sent_words)
-                                union = last_sent_words.union(prev_sent_words)
-                                if (len(intersection) / len(union)) > 0.85:
-                                    loop_detected = True
+                        # Only check if we actually have a buffer to check (it might be empty from our filter)
+                        if buffer:
+                            sentences = [s.strip() for s in re.split(r'[.!?\n]+', buffer) if len(s.strip()) > 15]
+                            if len(sentences) >= 3:
+                                last = set(sentences[-1].lower().split())
+                                prev = set(sentences[-2].lower().split())
+                                if last and prev:
+                                    jaccard = len(last & prev) / len(last | prev)
+                                    if jaccard > 0.80:
+                                        loop_detected = True
+                    
+                    # 3c. Vocabulary stagnation — if the last 80+ words
+                    # use fewer than 25 unique words, the model is stuck
+                    if not loop_detected and len(words) > 80:
+                        tail = words[-80:]
+                        unique_ratio = len(set(w.lower() for w in tail)) / len(tail)
+                        if unique_ratio < 0.30:
+                            loop_detected = True
                                 
                     if loop_detected:
                         yield "..."
                         break
                             
-                    yield content
+                    # If we got here, we are not in a think block, and we haven't just exited one.
+                    # Yield the new raw chunk directly. But guard against cases where the raw chunk
+                    # contains fragments of the think tags that didn't trigger the state changes above.
+                    clean_content = content.replace("<think>", "").replace("</think>", "")
+                    if clean_content and not "<think>" in clean_content:
+                        yield clean_content
 
     # ──────────────────────────────────────────────────────
     # GENERATION: Get answers from the local LLM
     # ──────────────────────────────────────────────────────
 
-    def query(self, question: str, top_k: int = TOP_K) -> RAGResponse:
+    def query(self, question: str, top_k: int = TOP_K, chat_history: list = None) -> RAGResponse:
         """
         Execute a full RAG query: Retrieve -> Augment -> Generate.
 
@@ -634,7 +656,7 @@ class RAGPipeline:
             context = ""
             is_chat_mode = True
 
-        messages = self._build_messages(question, context)
+        messages = self._build_messages(question, context, chat_history=chat_history)
         
         # Generation settings are already globally defined in initialize()
 
@@ -653,7 +675,7 @@ class RAGPipeline:
             query=question
         )
 
-    def query_stream(self, question: str, top_k: int = TOP_K):
+    def query_stream(self, question: str, top_k: int = TOP_K, chat_history: list = None):
         """
         Execute a RAG query with STREAMING response.
 
@@ -673,6 +695,7 @@ class RAGPipeline:
         Args:
             question: The user's question text
             top_k:    Number of context chunks to retrieve
+            chat_history: Optional list of previous message dicts
 
         Yields:
             Tuples of (token: str | None, sources: list[RetrievedChunk])
@@ -692,7 +715,7 @@ class RAGPipeline:
             context = ""
             is_chat_mode = True
 
-        messages = self._build_messages(question, context)
+        messages = self._build_messages(question, context, chat_history=chat_history)
         
         # Generation settings are already globally defined in initialize()
 

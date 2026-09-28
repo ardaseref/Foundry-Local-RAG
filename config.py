@@ -32,8 +32,11 @@ DB_PATH = DB_DIR / "knowledge_base.db"
 EMBEDDING_MODEL = "qwen3-embedding-0.6b"
 
 # Chat model — generates natural language answers
-# phi-3.5-mini offers excellent quality for its size (~3.8B params)
-CHAT_MODEL = "phi-3.5-mini"
+# Phi-4-mini-instruct: 3.8B parameter model with excellent native 
+# multilingual support (including Turkish) and reasoning capability.
+# Replaces qwen3-4b which suffers from ONNX Runtime GenAI token
+# corruption bugs (generating 'ä' and infinite loops) when running locally.
+CHAT_MODEL = "phi-4-mini"
 
 # Application name registered with Foundry Local SDK
 APP_NAME = "foundry_rag_enterprise"
@@ -55,9 +58,10 @@ CHUNK_OVERLAP = 50
 TOP_K = 3
 
 # Minimum cosine similarity score to consider a chunk relevant.
-# 0.55 filters out noise (e.g., greetings matching random chunks)
-# while still catching genuinely related content.
-SIMILARITY_THRESHOLD = 0.55
+# 0.65 is tuned to prevent false positives (e.g., greetings or
+# jokes matching prompt_engineering.txt) while still catching
+# genuinely relevant queries like "What is RAG?".
+SIMILARITY_THRESHOLD = 0.65
 
 # ──────────────────────────────────────────────────────────
 # 5. SYSTEM PROMPTS — TWO-PROMPT ARCHITECTURE
@@ -75,37 +79,37 @@ SIMILARITY_THRESHOLD = 0.55
 
 # ── 5a. CASUAL CHAT (no relevant documents found) ────────
 # Used when the similarity search returns no chunks above
-# the threshold. The model acts as a simple friendly assistant.
-SYSTEM_PROMPT_CHAT = """You are a helpful Enterprise AI routing assistant.
-Your task is to politely greet the user and ask how you can help them.
-Keep your response to a single, brief sentence.
-Always respond in the language the user wrote in."""
+# the threshold. The model acts as a helpful general assistant.
+SYSTEM_PROMPT_CHAT = """You are a helpful AI assistant.
+Answer the user's question directly and concisely.
+Always respond in the same language the user writes in."""
 
 # ── 5b. RAG GROUNDED ANSWERING (documents found) ─────────
 # Used when relevant chunks are retrieved from the knowledge base.
 # The {context} placeholder is filled with labeled source chunks.
-SYSTEM_PROMPT_RAG = """You are a strict data extraction assistant.
-Extract the answer to the user's question using ONLY the provided context.
-If the context lacks the answer, say "I cannot answer this based on the provided context."
-Always respond in the language the user wrote in.
+SYSTEM_PROMPT_RAG = """You are a factual answering assistant.
+Answer the user's question using ONLY the information in the Context below.
+Always respond in the same language the user writes in.
+Rules:
+- Use ONLY facts stated in the Context. Do NOT add outside knowledge.
+- If the Context does not contain the answer, respond exactly: "I cannot answer this based on the provided context."
+- Keep your answer concise and well-structured.
 
 Context:
 {context}"""
 
 # ──────────────────────────────────────────────────────────
-# 6. GENERATION PARAMETERS — DETERMINISTIC OUTPUT
+# 6. GENERATION PARAMETERS
 # ──────────────────────────────────────────────────────────
-# These are applied to the Foundry SDK's ChatClientSettings
-# to enforce deterministic, bounded generation.
-#
-# temperature=0.0  → Greedy decoding; absolute determinism
-# max_tokens=256   → Hard ceiling prevents runaway loops
-#                    (a concise RAG answer fits in ~150 tokens;
-#                     256 allows headroom without letting loops
-#                     burn 500 tokens of garbage)
-# frequency_penalty=0.3 → Penalizes repeated tokens directly
+# temperature=0.1  → Near-deterministic; avoids the ONNX
+#                    empty-stream bug that 0.0 causes with
+#                    some frequency_penalty values
+# max_tokens=512   → Generous ceiling for detailed RAG answers
+# frequency_penalty=0.0 → Disabled; the ONNX runtime silently
+#                         fails when this is passed as 0.0,
+#                         so we conditionally exclude it
 # ──────────────────────────────────────────────────────────
-CHAT_TEMPERATURE = 0.1
+CHAT_TEMPERATURE = 0.2
 CHAT_MAX_TOKENS = 512
 CHAT_FREQUENCY_PENALTY = 0.0
 

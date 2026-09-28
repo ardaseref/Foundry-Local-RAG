@@ -61,6 +61,10 @@ def init_session_state():
         st.session_state.messages = []
     if "is_ready" not in st.session_state:
         st.session_state.is_ready = False
+    if "is_generating" not in st.session_state:
+        st.session_state.is_generating = False
+    if "pending_input" not in st.session_state:
+        st.session_state.pending_input = None
 
 
 # ──────────────────────────────────────────────────────────
@@ -227,8 +231,16 @@ def handle_user_query(user_input: str):
 
         full_response = ""
         retrieved_sources = []
+        
+        # Build chat history from session state (excluding the current user_input we just appended)
+        # We take all messages up to the last one
+        chat_history = []
+        for msg in st.session_state.messages[:-1]:
+            # Only include user and assistant roles
+            if msg["role"] in ["user", "assistant"]:
+                chat_history.append({"role": msg["role"], "content": msg["content"]})
 
-        for token, sources in st.session_state.pipeline.query_stream(user_input):
+        for token, sources in st.session_state.pipeline.query_stream(user_input, chat_history=chat_history):
             # First token carries the source list
             if sources:
                 retrieved_sources = sources
@@ -273,9 +285,24 @@ def main():
 
     # ── Chat input (disabled until models are ready) ──────
     if st.session_state.is_ready:
-        user_input = st.chat_input("Ask a question about your knowledge base...")
-        if user_input:
+        # If we have a pending input, process it now while the input box is locked
+        if st.session_state.pending_input:
+            user_input = st.session_state.pending_input
+            st.session_state.pending_input = None
+            st.session_state.is_generating = True
+            
+            # Render a disabled input box immediately to prevent concurrent submissions
+            st.chat_input("Generating response...", disabled=True)
             handle_user_query(user_input)
+            
+            # Re-enable and refresh
+            st.session_state.is_generating = False
+            st.rerun()
+        else:
+            user_input = st.chat_input("Ask a question about your knowledge base...", disabled=st.session_state.is_generating)
+            if user_input:
+                st.session_state.pending_input = user_input
+                st.rerun()
     else:
         st.chat_input("Load the models first (sidebar)...", disabled=True)
         if not st.session_state.messages:
