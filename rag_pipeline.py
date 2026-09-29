@@ -207,22 +207,14 @@ class RAGPipeline:
             if progress_callback:
                 progress_callback(stage, value)
 
-        # Step 1: Initialize the SDK
+        # Step 1: Initialize the SDK (singleton-safe)
         print("[AI] Initializing Foundry Local SDK...")
-        config = Configuration(app_name=APP_NAME)
-        FoundryLocalManager.initialize(config)
+        if FoundryLocalManager.instance is None:
+            config = Configuration(app_name=APP_NAME)
+            FoundryLocalManager.initialize(config)
         manager = FoundryLocalManager.instance
 
-        # Step 1.5: Explicitly download & register GPU Execution Providers.
-        # Without this, the SDK may silently fall back to CPU.
-        # This forces it to discover and activate DirectML / CUDA / etc.
-        print("[>>] Registering hardware execution providers (GPU/NPU)...")
-        try:
-            ep_result = manager.download_and_register_eps()
-            print(f"  [OK] EP registration result: {ep_result}")
-        except Exception as ep_err:
-            print(f"  [WARN] EP registration failed ({ep_err}), falling back to defaults.")
-            ep_result = None
+
 
         # Step 2: Load the EMBEDDING model
         print(f"[>>] Loading embedding model: {EMBEDDING_MODEL}")
@@ -240,27 +232,51 @@ class RAGPipeline:
         # Step 3: Load the CHAT model
         print(f"[>>] Loading chat model: {CHAT_MODEL}")
         self._chat_model = manager.catalog.get_model(CHAT_MODEL)
+        if not self._chat_model:
+            # Fallback: search by exact ID
+            self._chat_model = next((m for m in manager.catalog.list_models() if CHAT_MODEL in m.id), None)
+            
+        if not self._chat_model:
+            raise ValueError(f"Model '{CHAT_MODEL}' not found in Foundry Local catalog!")
 
         # ---------------------------------------------------------
         # GPU FIX: Dynamically determine the exact variant ID required
-        # for hardware acceleration instead of guessing strings.
+        # for hardware acceleration. explicitly prefer CUDA over generic-gpu.
         # ---------------------------------------------------------
         gpu_variant = None
         available_ids = [v.id for v in self._chat_model.variants]
         print(f"  [DB] Available variants in catalog: {available_ids}")
         
+        # Priority 1: CUDA
         for variant in self._chat_model.variants:
             v_id_lower = variant.id.lower()
-            # Any variant that isn't the generic CPU fallback is hardware-accelerated
-            if "generic-cpu" not in v_id_lower:
+            if "cuda" in v_id_lower:
                 gpu_variant = variant
                 break
+                
+        # Priority 2: Any non-CPU (like generic-gpu, directml)
+        if not gpu_variant:
+            for variant in self._chat_model.variants:
+                if "generic-cpu" not in variant.id.lower():
+                    gpu_variant = variant
+                    break
                 
         if gpu_variant:
             print(f"  [>>] Forcing hardware-accelerated variant: {gpu_variant.id}")
             self._chat_model.select_variant(gpu_variant)
         else:
             print("  [WARN] GPU variant not found in catalog. Using default.")
+
+        # Step 3.5: Explicitly download & register GPU Execution Providers
+        # AFTER variant selection but BEFORE loading.
+        # This ensures the required EP (e.g., CUDA) is activated for the variant.
+        print("[>>] Registering hardware execution providers (GPU/NPU)...")
+        try:
+            ep_result = manager.download_and_register_eps()
+            print(f"  [OK] EP registration result: {ep_result}")
+        except Exception as ep_err:
+            print(f"  [WARN] EP registration failed ({ep_err}), falling back to defaults.")
+            ep_result = None
 
         self._chat_model.download(
             lambda p: (_notify("chat_download", p),
@@ -564,7 +580,7 @@ class RAGPipeline:
                     # 2. Chat Mode Length Guard
                     if is_chat_mode:
                         words = buffer.split()
-                        if len(words) > 60:
+                        if len(words) > 300:
                             yield "..."
                             break
 

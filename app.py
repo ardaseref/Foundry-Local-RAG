@@ -55,16 +55,14 @@ st.set_page_config(
 
 def init_session_state():
     """Create session-state keys if they don't already exist."""
-    if "pipeline" not in st.session_state:
+    if "pipeline" not in st.session_state or st.session_state.get("current_model") != CHAT_MODEL:
         st.session_state.pipeline = RAGPipeline()
+        st.session_state.current_model = CHAT_MODEL
+        st.session_state.is_ready = False
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "is_ready" not in st.session_state:
         st.session_state.is_ready = False
-    if "is_generating" not in st.session_state:
-        st.session_state.is_generating = False
-    if "pending_input" not in st.session_state:
-        st.session_state.pending_input = None
 
 
 # ──────────────────────────────────────────────────────────
@@ -133,13 +131,10 @@ def render_sidebar():
         st.title("Controls")
 
         # ── Model status & load button ────────────────────
-        if st.session_state.is_ready:
-            st.success("Models loaded", icon="\u2705")
-        else:
-            st.warning("Models not loaded", icon="\u26a0\ufe0f")
-            if st.button("Load Models", type="primary", use_container_width=True):
-                load_models()
+        if not st.session_state.is_ready:
+            load_models()
             return  # Don't render stats until models are ready
+        st.success("Models loaded", icon="\u2705")
 
         st.divider()
 
@@ -233,9 +228,10 @@ def handle_user_query(user_input: str):
         retrieved_sources = []
         
         # Build chat history from session state (excluding the current user_input we just appended)
-        # We take all messages up to the last one
+        # Limit to the last 6 messages (3 turns) to prevent context window overflow and slowness
         chat_history = []
-        for msg in st.session_state.messages[:-1]:
+        recent_messages = st.session_state.messages[-7:-1]
+        for msg in recent_messages:
             # Only include user and assistant roles
             if msg["role"] in ["user", "assistant"]:
                 chat_history.append({"role": msg["role"], "content": msg["content"]})
@@ -283,34 +279,14 @@ def main():
     # ── Chat history ──────────────────────────────────────
     render_chat_history()
 
-    # ── Chat input (disabled until models are ready) ──────
+    # ── Chat input ────────────────────────────────────────
     if st.session_state.is_ready:
-        # If we have a pending input, process it now while the input box is locked
-        if st.session_state.pending_input:
-            user_input = st.session_state.pending_input
-            st.session_state.pending_input = None
-            st.session_state.is_generating = True
-            
-            # Render a disabled input box immediately to prevent concurrent submissions
-            st.chat_input("Generating response...", disabled=True)
+        user_input = st.chat_input("Ask a question about your knowledge base...")
+        if user_input:
             handle_user_query(user_input)
-            
-            # Re-enable and refresh
-            st.session_state.is_generating = False
             st.rerun()
-        else:
-            user_input = st.chat_input("Ask a question about your knowledge base...", disabled=st.session_state.is_generating)
-            if user_input:
-                st.session_state.pending_input = user_input
-                st.rerun()
     else:
-        st.chat_input("Load the models first (sidebar)...", disabled=True)
-        if not st.session_state.messages:
-            st.info(
-                "Click **Load Models** in the sidebar to initialize the AI engine. "
-                "Once loaded, you can ask questions about your indexed knowledge base.",
-                icon="\u2139\ufe0f",
-            )
+        st.chat_input("Loading models...", disabled=True)
 
 
 if __name__ == "__main__":

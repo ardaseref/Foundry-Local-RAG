@@ -1,0 +1,131 @@
+﻿======================================================================
+STABILIZATION TEST HARNESS
+======================================================================
+[AI] Initializing Foundry Local SDK...
+[>>] Registering hardware execution providers (GPU/NPU)...
+  [OK] EP registration result: success=True status='EP registration complete: 3 bootstrapper(s) succeeded in 34606ms. Available EPs: CPUExecutionProvider, CUDAExecutionProvider, WebGpuExecutionProvider' registered_eps=['CUDAExecutionProvider', 'WebGpuExecutionProvider', 'NvTensorRTRTXExecutionProvider'] failed_eps=[]
+[>>] Loading embedding model: qwen3-embedding-0.6b
+
+  [OK] Embedding model ready!
+[>>] Loading chat model: phi-4-mini
+  [DB] Available variants in catalog: ['Phi-4-mini-instruct-cuda-gpu:5', 'Phi-4-mini-instruct-generic-gpu:5', 'Phi-4-mini-instruct-generic-cpu:5']
+  [>>] Forcing hardware-accelerated variant: Phi-4-mini-instruct-cuda-gpu:5
+
+  [OK] Chat model ready! (temp=0.2, max_tokens=512, freq_penalty=0.0)
+  [HW] Execution Providers registered: success=True status='EP registration complete: 3 bootstrapper(s) succeeded in 34606ms. Available EPs: CPUExecutionProvider, CUDAExecutionProvider, WebGpuExecutionProvider' registered_eps=['CUDAExecutionProvider', 'WebGpuExecutionProvider', 'NvTensorRTRTXExecutionProvider'] failed_eps=[]
+[OK] RAG Pipeline fully initialized!
+
+
+Knowledge Base: 7 chunks from 3 documents
+  - foundry_local.txt: 2 chunks
+  - prompt_engineering.txt: 3 chunks
+  - rag_overview.txt: 2 chunks
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 1: Hello, how are you?
+  Expect sources: False  |  Expect language: en
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (30 chars): I don't have that information.
+  Sources: ['prompt_engineering.txt'] (scores: ['0.505'])
+  Source check: FAIL (expected False, got True)
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> FAIL
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 2: What is RAG?
+  Expect sources: True  |  Expect language: en
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (700 chars): RAG stands for Retrieval-Augmented Generation, which is an AI design pattern that enhances the accuracy and reliability of large language model (LLM) responses by incorporating external knowledge sour
+  Sources: ['rag_overview.txt', 'prompt_engineering.txt', 'rag_overview.txt'] (scores: ['0.673', '0.647', '0.639'])
+  Source check: OK
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> PASS
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 3: What is prompt engineering?
+  Expect sources: True  |  Expect language: en
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (683 chars): Prompt engineering is the practice of designing and refining the instructions given to a large language model (LLM) to achieve desired behaviors and output quality. It involves creating system prompts
+  Sources: ['prompt_engineering.txt', 'prompt_engineering.txt'] (scores: ['0.694', '0.611'])
+  Source check: OK
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> PASS
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 4: Nas─▒ls─▒n?
+  Expect sources: False  |  Expect language: tr
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (133 chars): Merhaba! Bir AI olarak duygular─▒m yok, ancak bu konuda size yard─▒mc─▒ olmaktan mutluluk duyar─▒m. Bug├╝n size nas─▒l yard─▒mc─▒ olabilirim?
+  Sources: None
+  Source check: OK
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> PASS
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 5: RAG nedir?
+  Expect sources: True  |  Expect language: tr
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (102 chars): RAG, Retrieval-Augmented Generation, Retrieval-Augmented Generation, Retrieval-Augmented Generation...
+  Sources: ['rag_overview.txt', 'prompt_engineering.txt', 'rag_overview.txt'] (scores: ['0.508', '0.508', '0.501'])
+  Source check: OK
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> PASS
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 6: What is the diameter of Jupiter?
+  Expect sources: False  |  Expect language: en
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (81 chars): The diameter of Jupiter is approximately 139,820 kilometers (about 86,881 miles).
+  Sources: None
+  Source check: OK
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> PASS
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 7: Write me a short poem about the sea
+  Expect sources: False  |  Expect language: en
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Answer (288 chars): Whispers of waves in rhythmic dance,
+A boundless blue, a mystic trance.
+Sunrise kisses, moonlight's glow,
+Secrets of the deep, forever flow.
+
+Salt-kissed breeze, a sailor's song,
+Endless horizon, wher
+  Sources: None
+  Source check: OK
+  Answer check: OK
+  Prompt bleed: CLEAN
+  >>> PASS
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+TEST 8: Multi-turn conversation
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Turn 1 answer: I don't have that information.
+  Turn 2 answer: Retrieval-Augmented Generation (RAG) is an AI design pattern that significantly improves the accurac
+  Turn 3 answer: Retrieval-Augmented Generation (RAG) is an AI design pattern that enhances the accuracy and reliabil
+  >>> PASS
+
+======================================================================
+SUMMARY
+======================================================================
+  Ô£ù Test 1: Hello, how are you?  ÔåÆ  FAIL
+  Ô£ô Test 2: What is RAG?  ÔåÆ  PASS
+  Ô£ô Test 3: What is prompt engineering?  ÔåÆ  PASS
+  Ô£ô Test 4: Nas─▒ls─▒n?  ÔåÆ  PASS
+  Ô£ô Test 5: RAG nedir?  ÔåÆ  PASS
+  Ô£ô Test 6: What is the diameter of Jupiter?  ÔåÆ  PASS
+  Ô£ô Test 7: Write me a short poem about the sea  ÔåÆ  PASS
+  Ô£ô Test 8: Multi-turn conversation  ÔåÆ  PASS
+
+  7/8 tests passed
+======================================================================
+[CLEANUP] Unloading embedding model...
+[CLEANUP] Unloading chat model...
+[OK] All models unloaded. Resources freed.

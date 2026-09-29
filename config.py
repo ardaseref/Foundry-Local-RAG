@@ -32,10 +32,9 @@ DB_PATH = DB_DIR / "knowledge_base.db"
 EMBEDDING_MODEL = "qwen3-embedding-0.6b"
 
 # Chat model — generates natural language answers
-# Phi-4-mini-instruct: 3.8B parameter model with excellent native 
-# multilingual support (including Turkish) and reasoning capability.
-# Replaces qwen3-4b which suffers from ONNX Runtime GenAI token
-# corruption bugs (generating 'ä' and infinite loops) when running locally.
+# phi-4-mini: Microsoft's 3.8B parameter model, optimized for Foundry Local.
+# Already cached on disk with CUDA GPU variant. Fast, stable, and the best
+# instruction-follower under 7B. Verified working on this machine.
 CHAT_MODEL = "phi-4-mini"
 
 # Application name registered with Foundry Local SDK
@@ -58,10 +57,11 @@ CHUNK_OVERLAP = 50
 TOP_K = 3
 
 # Minimum cosine similarity score to consider a chunk relevant.
-# 0.65 is tuned to prevent false positives (e.g., greetings or
-# jokes matching prompt_engineering.txt) while still catching
-# genuinely relevant queries like "What is RAG?".
-SIMILARITY_THRESHOLD = 0.65
+# 0.50 enables cross-lingual retrieval (Turkish "RAG nedir?" scores
+# ~0.508) while keeping greetings borderline. When a greeting does
+# match, the model correctly responds "I don't have that information"
+# because the context doesn't answer social questions.
+SIMILARITY_THRESHOLD = 0.50
 
 # ──────────────────────────────────────────────────────────
 # 5. SYSTEM PROMPTS — TWO-PROMPT ARCHITECTURE
@@ -80,20 +80,15 @@ SIMILARITY_THRESHOLD = 0.65
 # ── 5a. CASUAL CHAT (no relevant documents found) ────────
 # Used when the similarity search returns no chunks above
 # the threshold. The model acts as a helpful general assistant.
-SYSTEM_PROMPT_CHAT = """You are a helpful AI assistant.
-Answer the user's question directly and concisely.
-Always respond in the same language the user writes in."""
+SYSTEM_PROMPT_CHAT = """You are a helpful assistant. Answer the user's question directly.
+Reply in the same language the user writes in."""
 
 # ── 5b. RAG GROUNDED ANSWERING (documents found) ─────────
 # Used when relevant chunks are retrieved from the knowledge base.
 # The {context} placeholder is filled with labeled source chunks.
-SYSTEM_PROMPT_RAG = """You are a factual answering assistant.
-Answer the user's question using ONLY the information in the Context below.
-Always respond in the same language the user writes in.
-Rules:
-- Use ONLY facts stated in the Context. Do NOT add outside knowledge.
-- If the Context does not contain the answer, respond exactly: "I cannot answer this based on the provided context."
-- Keep your answer concise and well-structured.
+SYSTEM_PROMPT_RAG = """You are a factual assistant. Answer ONLY using the Context below.
+Reply in the same language the user writes in.
+If the Context does not answer the question, say: "I don't have that information."
 
 Context:
 {context}"""
