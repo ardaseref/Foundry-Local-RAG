@@ -57,11 +57,8 @@ CHUNK_OVERLAP = 50
 TOP_K = 3
 
 # Minimum cosine similarity score to consider a chunk relevant.
-# 0.50 enables cross-lingual retrieval (Turkish "RAG nedir?" scores
-# ~0.508) while keeping greetings borderline. When a greeting does
-# match, the model correctly responds "I don't have that information"
-# because the context doesn't answer social questions.
-SIMILARITY_THRESHOLD = 0.50
+# 0.45 enables Turkish cross-lingual queries to pass the threshold.
+SIMILARITY_THRESHOLD = 0.45
 
 # ──────────────────────────────────────────────────────────
 # 5. SYSTEM PROMPTS — TWO-PROMPT ARCHITECTURE
@@ -80,15 +77,15 @@ SIMILARITY_THRESHOLD = 0.50
 # ── 5a. CASUAL CHAT (no relevant documents found) ────────
 # Used when the similarity search returns no chunks above
 # the threshold. The model acts as a helpful general assistant.
-SYSTEM_PROMPT_CHAT = """You are a helpful assistant. Answer the user's question directly.
-Reply in the same language the user writes in."""
+SYSTEM_PROMPT_CHAT = """You are a helpful AI assistant.
+Answer the user's question directly and concisely. If you are unsure about something, say so honestly."""
 
 # ── 5b. RAG GROUNDED ANSWERING (documents found) ─────────
 # Used when relevant chunks are retrieved from the knowledge base.
 # The {context} placeholder is filled with labeled source chunks.
-SYSTEM_PROMPT_RAG = """You are a factual assistant. Answer ONLY using the Context below.
-Reply in the same language the user writes in.
-If the Context does not answer the question, say: "I don't have that information."
+SYSTEM_PROMPT_RAG = """You are a factual AI assistant.
+Use the Context below to answer the user's question accurately. 
+If the Context is completely irrelevant, ignore it and chat normally using your own knowledge.
 
 Context:
 {context}"""
@@ -104,7 +101,8 @@ Context:
 #                         fails when this is passed as 0.0,
 #                         so we conditionally exclude it
 # ──────────────────────────────────────────────────────────
-CHAT_TEMPERATURE = 0.2
+# temperature=0.1 ensures razor-sharp, factual answers for the live demo
+CHAT_TEMPERATURE = 0.1
 CHAT_MAX_TOKENS = 512
 CHAT_FREQUENCY_PENALTY = 0.0
 

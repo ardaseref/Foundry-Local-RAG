@@ -433,8 +433,18 @@ class RAGPipeline:
 
         # Step 3: Calculate cosine similarity for EVERY chunk
         scored_chunks = []
+        q_lower = query.lower()
+        
         for chunk in db_chunks:
             score = cosine_similarity(query_embedding, chunk["embedding"])
+
+            # Hybrid Search Boost: If the query contains the document filename,
+            # we heavily boost the similarity score to guarantee retrieval.
+            s_lower = chunk["source"].lower()
+            s_name_only = s_lower.replace(".txt", "").replace(".md", "")
+            
+            if s_name_only in q_lower or s_lower in q_lower:
+                score += 0.20
 
             # Only keep chunks above the minimum similarity threshold
             # This filters out completely irrelevant results
@@ -507,17 +517,28 @@ class RAGPipeline:
         if context and context.strip():
             # RAG path: inject retrieved documents into the grounded prompt
             system_prompt = SYSTEM_PROMPT_RAG.format(context=context)
+            # RAG mode: include up to 1 turn (last 2 messages) of history
+            if chat_history:
+                history_to_use = chat_history[-2:]
+            else:
+                history_to_use = []
         else:
             # Casual chat path: clean prompt with zero RAG vocabulary
             system_prompt = SYSTEM_PROMPT_CHAT
+            # Chat mode: Limit history to 10 messages (5 turns) to ensure 
+            # lightning-fast ONNX inference during the live demo.
+            if chat_history:
+                history_to_use = chat_history[-10:]
+            else:
+                history_to_use = []
 
         messages = [{"role": "system", "content": system_prompt}]
         
-        if chat_history:
-            messages.extend(chat_history)
+        if history_to_use:
+            messages.extend(history_to_use)
             
-        # Ensure the current query is the final message if not already included
-        if not chat_history or chat_history[-1].get("content") != query:
+        # Ensure the current query is the final user message if not already included
+        if not history_to_use or history_to_use[-1].get("content") != query:
             messages.append({"role": "user", "content": query})
 
         return messages
@@ -584,45 +605,9 @@ class RAGPipeline:
                             yield "..."
                             break
 
-                    # 3. N-gram Loop Detection
-                    words = buffer.split()
-                    loop_detected = False
+                    # Loop detection removed per user request: We will let the model generate naturally, 
+                    # even if it loops on creative edge-cases like poetry, because hard-stops look worse.
                     
-                    # 3a. Exact word sequence repetition (n=1..6, repeats 3x)
-                    for n in range(1, 7):
-                        if len(words) >= 3 * n:
-                            seq1 = words[-n:]
-                            seq2 = words[-2*n:-n]
-                            seq3 = words[-3*n:-2*n]
-                            if seq1 == seq2 and seq2 == seq3:
-                                loop_detected = True
-                                break
-                                
-                    # 3b. Semantic sentence repetition (Jaccard > 0.80)
-                    if not loop_detected:
-                        # Only check if we actually have a buffer to check (it might be empty from our filter)
-                        if buffer:
-                            sentences = [s.strip() for s in re.split(r'[.!?\n]+', buffer) if len(s.strip()) > 15]
-                            if len(sentences) >= 3:
-                                last = set(sentences[-1].lower().split())
-                                prev = set(sentences[-2].lower().split())
-                                if last and prev:
-                                    jaccard = len(last & prev) / len(last | prev)
-                                    if jaccard > 0.80:
-                                        loop_detected = True
-                    
-                    # 3c. Vocabulary stagnation — if the last 80+ words
-                    # use fewer than 25 unique words, the model is stuck
-                    if not loop_detected and len(words) > 80:
-                        tail = words[-80:]
-                        unique_ratio = len(set(w.lower() for w in tail)) / len(tail)
-                        if unique_ratio < 0.30:
-                            loop_detected = True
-                                
-                    if loop_detected:
-                        yield "..."
-                        break
-                            
                     # If we got here, we are not in a think block, and we haven't just exited one.
                     # Yield the new raw chunk directly. But guard against cases where the raw chunk
                     # contains fragments of the think tags that didn't trigger the state changes above.
@@ -679,9 +664,16 @@ class RAGPipeline:
         # ── GENERATE: Get answer from local LLM ──────────
         # Use streaming to collect the full response token-by-token
         answer_parts = []
-        raw_stream = self._chat_client.complete_streaming_chat(messages)
-        for content in self._safe_stream(raw_stream, is_chat_mode=is_chat_mode):
-            answer_parts.append(content)
+        try:
+            raw_stream = self._chat_client.complete_streaming_chat(messages)
+            for content in self._safe_stream(raw_stream, is_chat_mode=is_chat_mode):
+                answer_parts.append(content)
+        except Exception as e:
+            error_msg = str(e)
+            if "CUDA" in error_msg or "illegal memory" in error_msg:
+                answer_parts.append("\n\n⚠️ GPU error occurred. Please refresh the page to recover.")
+            else:
+                answer_parts.append(f"\n\n⚠️ Error: {error_msg}")
 
         full_answer = "".join(answer_parts)
 
@@ -737,13 +729,20 @@ class RAGPipeline:
 
         # ── GENERATE: Stream answer tokens from local LLM ─
         first_token = True
-        raw_stream = self._chat_client.complete_streaming_chat(messages)
-        for content in self._safe_stream(raw_stream, is_chat_mode=is_chat_mode):
-            if first_token:
-                yield content, relevant_chunks
-                first_token = False
+        try:
+            raw_stream = self._chat_client.complete_streaming_chat(messages)
+            for content in self._safe_stream(raw_stream, is_chat_mode=is_chat_mode):
+                if first_token:
+                    yield content, relevant_chunks
+                    first_token = False
+                else:
+                    yield content, []
+        except Exception as e:
+            error_msg = str(e)
+            if "CUDA" in error_msg or "illegal memory" in error_msg:
+                yield "\n\n⚠️ GPU error occurred. Please refresh the page to recover.", relevant_chunks if first_token else []
             else:
-                yield content, []
+                yield f"\n\n⚠️ Error: {error_msg}", relevant_chunks if first_token else []
 
     # ──────────────────────────────────────────────────────
     # UTILITY METHODS
