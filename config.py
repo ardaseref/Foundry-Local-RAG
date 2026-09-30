@@ -44,11 +44,11 @@ APP_NAME = "foundry_rag_enterprise"
 # 3. CHUNKING PARAMETERS
 # ──────────────────────────────────────────────────────────
 # Maximum number of words per chunk
-CHUNK_SIZE = 300
+CHUNK_SIZE = 150
 
 # Number of overlapping words between consecutive chunks
 # Overlap ensures context continuity at chunk boundaries
-CHUNK_OVERLAP = 50
+CHUNK_OVERLAP = 30
 
 # ──────────────────────────────────────────────────────────
 # 4. RETRIEVAL PARAMETERS
@@ -57,8 +57,8 @@ CHUNK_OVERLAP = 50
 TOP_K = 3
 
 # Minimum cosine similarity score to consider a chunk relevant.
-# 0.45 enables Turkish cross-lingual queries to pass the threshold.
-SIMILARITY_THRESHOLD = 0.45
+# 0.38 enables highly technical/fictional cross-lingual queries to pass the threshold.
+SIMILARITY_THRESHOLD = 0.38
 
 # ──────────────────────────────────────────────────────────
 # 5. SYSTEM PROMPTS — TWO-PROMPT ARCHITECTURE

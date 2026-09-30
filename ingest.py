@@ -20,6 +20,7 @@ Author:  Enterprise RAG Assistant Project
 """
 
 import json
+import re
 import sqlite3
 import sys
 import time
@@ -190,35 +191,37 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     Returns:
         A list of text chunk strings
     """
-    # Split the text into individual words
-    words = text.split()
-
-    # If the text is shorter than one chunk, return it as-is
-    if len(words) <= chunk_size:
-        return [text.strip()]
-
+    # Split text into sentences using regex (split after . ! or ?)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    
     chunks = []
-    start = 0
-
-    while start < len(words):
-        # Take a window of 'chunk_size' words starting from 'start'
-        end = start + chunk_size
-        chunk_words = words[start:end]
-
-        # Rejoin words into a text string for this chunk
-        chunk_text = " ".join(chunk_words).strip()
-
-        if chunk_text:  # Only add non-empty chunks
-            chunks.append(chunk_text)
-
-        # Move the window forward by (chunk_size - overlap) words
-        # This creates the overlapping effect
-        start += chunk_size - overlap
-
-        # Safety check: avoid infinite loop if overlap >= chunk_size
-        if chunk_size - overlap <= 0:
-            break
-
+    current_chunk = []
+    current_length = 0
+    
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+            
+        words = sentence.split()
+        
+        # If adding this sentence exceeds the chunk size, save the chunk
+        if current_length + len(words) > chunk_size and current_chunk:
+            chunks.append(" ".join(current_chunk))
+            
+            # Start the next chunk, keeping overlap in mind
+            # We take the end of the previous chunk up to 'overlap' words
+            overlap_words = current_chunk[-overlap:] if len(current_chunk) > overlap else current_chunk
+            current_chunk = overlap_words + words
+            current_length = len(current_chunk)
+        else:
+            current_chunk.extend(words)
+            current_length += len(words)
+            
+    # Add the final chunk
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+        
     return chunks
 
 
