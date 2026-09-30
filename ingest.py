@@ -1,7 +1,5 @@
 """
-============================================================
 ingest.py — Data Ingestion & Embedding Pipeline
-============================================================
 This script is the FIRST step in our RAG pipeline. It does 3 things:
 
   1. READS documents (text & PDF files) from the data/sample_docs/ folder
@@ -15,8 +13,6 @@ After running this script, the knowledge base is ready for queries.
 Usage:
     python ingest.py
 
-Author:  Enterprise RAG Assistant Project
-============================================================
 """
 
 import json
@@ -48,14 +44,10 @@ from config import (
     ensure_directories,
 )
 
-
-# ──────────────────────────────────────────────────────────
 # STEP 1: DOCUMENT READING
-# ──────────────────────────────────────────────────────────
 # These functions read raw text from .txt and .pdf files.
 # Each function returns a single string with all the text
 # content from the file.
-# ──────────────────────────────────────────────────────────
 
 def read_text_file(file_path: Path) -> str:
     """
@@ -69,7 +61,6 @@ def read_text_file(file_path: Path) -> str:
     """
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
-
 
 def read_pdf_file(file_path: Path) -> str:
     """
@@ -97,7 +88,6 @@ def read_pdf_file(file_path: Path) -> str:
         if text:
             pages_text.append(text)
     return "\n".join(pages_text)
-
 
 def load_documents(docs_dir: Path) -> list[dict]:
     """
@@ -152,10 +142,7 @@ def load_documents(docs_dir: Path) -> list[dict]:
 
     return documents
 
-
-# ──────────────────────────────────────────────────────────
 # STEP 2: TEXT CHUNKING
-# ──────────────────────────────────────────────────────────
 # Large documents need to be split into smaller pieces
 # called "chunks" before we can embed them. Why?
 #
@@ -165,7 +152,6 @@ def load_documents(docs_dir: Path) -> list[dict]:
 #
 # We use a "sliding window" approach with overlap to ensure
 # no important context is lost at chunk boundaries.
-# ──────────────────────────────────────────────────────────
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     """
@@ -224,7 +210,6 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
         
     return chunks
 
-
 def chunk_documents(documents: list[dict]) -> list[dict]:
     """
     Take a list of full documents and split each into chunks.
@@ -262,17 +247,13 @@ def chunk_documents(documents: list[dict]) -> list[dict]:
     print(f"\n  Total chunks created: {len(all_chunks)}")
     return all_chunks
 
-
-# ──────────────────────────────────────────────────────────
 # STEP 3: EMBEDDING GENERATION (using Foundry Local SDK)
-# ──────────────────────────────────────────────────────────
 # Embeddings are numerical vectors (lists of numbers) that
 # represent the MEANING of text. Similar texts will have
 # similar vectors — this is what enables semantic search.
 #
 # We use Microsoft Foundry Local to run the embedding model
 # entirely on your device. No internet connection needed!
-# ──────────────────────────────────────────────────────────
 
 def initialize_embedding_model():
     """
@@ -317,7 +298,6 @@ def initialize_embedding_model():
     embedding_client = embedding_model.get_embedding_client()
 
     return embedding_client, embedding_model
-
 
 def generate_embeddings(chunks: list[dict], embedding_client) -> list[dict]:
     """
@@ -374,10 +354,7 @@ def generate_embeddings(chunks: list[dict], embedding_client) -> list[dict]:
 
     return chunks
 
-
-# ──────────────────────────────────────────────────────────
 # STEP 4: SQLite DATABASE STORAGE
-# ──────────────────────────────────────────────────────────
 # We store the chunks and their embeddings in a SQLite
 # database — a lightweight, serverless database that lives
 # in a single file. No database server needed!
@@ -390,7 +367,6 @@ def generate_embeddings(chunks: list[dict], embedding_client) -> list[dict]:
 #       text        TEXT                   — the actual text content
 #       embedding   TEXT                   — JSON-serialized vector
 #   )
-# ──────────────────────────────────────────────────────────
 
 def create_database(db_path: Path) -> sqlite3.Connection:
     """
@@ -429,7 +405,6 @@ def create_database(db_path: Path) -> sqlite3.Connection:
     print("  [OK] Database schema created (table: 'chunks')")
     return conn
 
-
 def save_chunks_to_db(conn: sqlite3.Connection, chunks: list[dict]):
     """
     Insert all chunks (with embeddings) into the SQLite database.
@@ -463,7 +438,6 @@ def save_chunks_to_db(conn: sqlite3.Connection, chunks: list[dict]):
 
     conn.commit()
     print(f"  [OK] All {len(chunks)} chunks saved successfully!")
-
 
 def print_database_summary(conn: sqlite3.Connection):
     """
@@ -501,10 +475,7 @@ def print_database_summary(conn: sqlite3.Connection):
         print(f"  {source:<30} {count:>8} {min_len:>5}-{max_len:>5} chars")
     print("=" * 55)
 
-
-# ──────────────────────────────────────────────────────────
 # MAIN FUNCTION — Orchestrates the entire ingestion pipeline
-# ──────────────────────────────────────────────────────────
 
 def main():
     """
@@ -563,9 +534,6 @@ def main():
     print(f"   Database saved to: {DB_PATH}")
     print(f"   Ready for queries. Run 'streamlit run app.py' next.\n")
 
-
-# ──────────────────────────────────────────────────────────
 # Script entry point — runs when you execute: python ingest.py
-# ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     main()

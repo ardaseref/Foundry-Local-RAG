@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-============================================================
-app.py -- Streamlit Frontend for the Foundry RAG Assistant
-============================================================
+Streamlit Frontend
 Enterprise-grade chat interface built entirely with native
 Streamlit components. No custom CSS -- adapts cleanly to
 Streamlit's built-in light and dark themes.
@@ -16,8 +14,6 @@ Key Architecture:
 Run with:
     streamlit run app.py
 
-Author:  Enterprise RAG Assistant Project
-============================================================
 """
 
 import threading
@@ -28,10 +24,7 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ct
 from config import CHAT_MODEL, EMBEDDING_MODEL, PAGE_TITLE, TOP_K
 from rag_pipeline import RAGPipeline
 
-
-# ──────────────────────────────────────────────────────────
-# 1. PAGE CONFIGURATION (must be the FIRST Streamlit call)
-# ──────────────────────────────────────────────────────────
+# Page configuration (must be the FIRST Streamlit call)
 
 st.set_page_config(
     page_title=PAGE_TITLE,
@@ -40,18 +33,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# ──────────────────────────────────────────────────────────
-# 2. SESSION STATE INITIALIZATION
-# ──────────────────────────────────────────────────────────
-# Streamlit reruns the entire script on every interaction.
-# st.session_state is a persistent dict that survives reruns.
-#
-# We store:
-#   pipeline  -- RAGPipeline instance (models loaded once)
-#   messages  -- Chat history [{role, content, sources}, ...]
-#   is_ready  -- True once both models are loaded
-# ──────────────────────────────────────────────────────────
+# Session state initialization
 
 def init_session_state():
     """Create session-state keys if they don't already exist."""
@@ -64,21 +46,7 @@ def init_session_state():
     if "is_ready" not in st.session_state:
         st.session_state.is_ready = False
 
-
-# ──────────────────────────────────────────────────────────
-# 3. MODEL LOADING (thread-safe)
-# ──────────────────────────────────────────────────────────
-# The Foundry Local SDK downloads models on a background thread.
-# That thread doesn't have Streamlit's ScriptRunContext, which
-# causes "missing ScriptRunContext" warnings when the callback
-# tries to update a progress bar.
-#
-# Fix: Before calling initialize(), we capture the current
-# thread's ScriptRunContext. Inside the callback (which runs
-# on the SDK's internal thread), we re-attach that context
-# via add_script_run_ctx(). This makes the progress bar
-# update completely thread-safe.
-# ──────────────────────────────────────────────────────────
+# Model loading (thread-safe)
 
 def load_models():
     """
@@ -120,10 +88,7 @@ def load_models():
         progress_bar.empty()
         st.sidebar.error(f"Failed to load models: {e}")
 
-
-# ──────────────────────────────────────────────────────────
-# 4. SIDEBAR
-# ──────────────────────────────────────────────────────────
+# Sidebar
 
 def render_sidebar():
     """Render sidebar: model controls, KB stats, config info."""
@@ -167,10 +132,7 @@ def render_sidebar():
         st.caption("Microsoft Foundry Local SDK")
         st.caption("100% Local \u2022 Zero Cloud Dependency")
 
-
-# ──────────────────────────────────────────────────────────
-# 5. CHAT HISTORY RENDERING
-# ──────────────────────────────────────────────────────────
+# Chat history rendering
 
 def render_sources(sources):
     """Show retrieved chunks inside a native expander."""
@@ -184,7 +146,6 @@ def render_sources(sources):
             )
             st.markdown("")  # spacing
 
-
 def render_chat_history():
     """Re-draw every message stored in session state."""
     for msg in st.session_state.messages:
@@ -193,10 +154,7 @@ def render_chat_history():
             if msg["role"] == "assistant" and msg.get("sources"):
                 render_sources(msg["sources"])
 
-
-# ──────────────────────────────────────────────────────────
-# 6. STREAMING RESPONSE HANDLER
-# ──────────────────────────────────────────────────────────
+# Streaming response handler
 
 def handle_user_query(user_input: str):
     """
@@ -226,6 +184,7 @@ def handle_user_query(user_input: str):
 
         full_response = ""
         retrieved_sources = []
+        token_count = 0
         
         # Build chat history from session state (excluding the current user_input we just appended)
         # Limit to the last 6 messages (3 turns) to prevent context window overflow and slowness
@@ -243,7 +202,10 @@ def handle_user_query(user_input: str):
 
             if token:
                 full_response += token
-                response_placeholder.markdown(full_response + " \u258c")
+                token_count += 1
+                # Buffer Streamlit updates to prevent UI choppiness during live demo
+                if token_count % 3 == 0 or token.endswith('\n') or token.endswith(' '):
+                    response_placeholder.markdown(full_response + " \u258c")
 
         # Final render: replace the placeholder with clean text
         response_placeholder.markdown(full_response)
@@ -260,10 +222,7 @@ def handle_user_query(user_input: str):
         "sources": retrieved_sources,
     })
 
-
-# ──────────────────────────────────────────────────────────
-# 7. MAIN
-# ──────────────────────────────────────────────────────────
+# Main
 
 def main():
     """Assemble all components into the final app layout."""
@@ -287,7 +246,6 @@ def main():
             st.rerun()
     else:
         st.chat_input("Loading models...", disabled=True)
-
 
 if __name__ == "__main__":
     main()

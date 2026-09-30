@@ -1,7 +1,5 @@
 """
-============================================================
-rag_pipeline.py -- Core RAG (Retrieval-Augmented Generation) Logic
-============================================================
+Core RAG Logic
 This module is the BRAIN of our RAG assistant. It connects:
 
   1. RETRIEVAL  -- Finds relevant document chunks from SQLite
@@ -18,8 +16,6 @@ It exposes clean functions that the UI can call directly:
     pipeline.initialize()
     answer, sources = pipeline.query("What is Foundry Local?")
 
-Author:  Enterprise RAG Assistant Project
-============================================================
 """
 
 import json
@@ -46,14 +42,10 @@ from config import (
     TOP_K,
 )
 
-
-# ──────────────────────────────────────────────────────────
 # DATA CLASSES
-# ──────────────────────────────────────────────────────────
 # We use dataclasses to structure our return values cleanly.
 # This makes the code more readable and type-safe compared
 # to returning raw dictionaries or tuples.
-# ──────────────────────────────────────────────────────────
 
 @dataclass
 class RetrievedChunk:
@@ -73,7 +65,6 @@ class RetrievedChunk:
     text: str
     score: float
 
-
 @dataclass
 class RAGResponse:
     """
@@ -88,10 +79,7 @@ class RAGResponse:
     sources: list[RetrievedChunk] = field(default_factory=list)
     query: str = ""
 
-
-# ──────────────────────────────────────────────────────────
 # MATH UTILITIES -- Cosine Similarity
-# ──────────────────────────────────────────────────────────
 # Cosine similarity measures how "aligned" two vectors are.
 # It ranges from -1 (opposite) to +1 (identical direction).
 #
@@ -102,7 +90,6 @@ class RAGResponse:
 #
 # We compute this in pure Python (no numpy needed) to keep
 # dependencies minimal and the code easy to understand.
-# ──────────────────────────────────────────────────────────
 
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
     """
@@ -135,10 +122,7 @@ def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
 
     return dot_product / (magnitude_a * magnitude_b)
 
-
-# ──────────────────────────────────────────────────────────
 # RAG PIPELINE CLASS
-# ──────────────────────────────────────────────────────────
 # This class encapsulates the entire RAG workflow:
 #   - Model initialization (embedding + chat)
 #   - Document retrieval from SQLite
@@ -147,7 +131,6 @@ def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
 # Using a class allows the Streamlit app to initialize
 # models ONCE and reuse them across multiple user queries,
 # which is much faster than reloading for every question.
-# ──────────────────────────────────────────────────────────
 
 class RAGPipeline:
     """
@@ -179,10 +162,8 @@ class RAGPipeline:
         """Check if the pipeline has been initialized with models."""
         return self._is_initialized
 
-    # ──────────────────────────────────────────────────────
-    # MODEL INITIALIZATION
-    # ──────────────────────────────────────────────────────
-
+        # MODEL INITIALIZATION
+    
     def initialize(self, progress_callback=None):
         """
         Initialize the Foundry Local SDK and load both models.
@@ -213,8 +194,6 @@ class RAGPipeline:
             config = Configuration(app_name=APP_NAME)
             FoundryLocalManager.initialize(config)
         manager = FoundryLocalManager.instance
-
-
 
         # Step 2: Load the EMBEDDING model
         print(f"[>>] Loading embedding model: {EMBEDDING_MODEL}")
@@ -343,10 +322,8 @@ class RAGPipeline:
         except Exception:
             print("  [HW] Execution Provider: could not determine")
 
-    # ──────────────────────────────────────────────────────
-    # RETRIEVAL: Find relevant chunks from SQLite
-    # ──────────────────────────────────────────────────────
-
+        # RETRIEVAL: Find relevant chunks from SQLite
+    
     def _embed_query(self, query: str) -> list[float]:
         """
         Convert a user's question into an embedding vector.
@@ -465,10 +442,8 @@ class RAGPipeline:
         # Step 5: Return only the top-K results
         return scored_chunks[:top_k]
 
-    # ──────────────────────────────────────────────────────
-    # AUGMENTATION: Build the prompt with context
-    # ──────────────────────────────────────────────────────
-
+        # AUGMENTATION: Build the prompt with context
+    
     def _build_context_string(self, chunks: list[RetrievedChunk]) -> str:
         """
         Format retrieved chunks into a context string for the LLM.
@@ -594,11 +569,11 @@ class RAGPipeline:
                     
                     lower_buf = buffer.lower()
                     
-                    # 1. Prompt Bleed Detection
+                    # Prompt Bleed Detection
                     if any(phrase in lower_buf for phrase in forbidden_phrases):
                         break
                         
-                    # 2. Chat Mode Length Guard
+                    # Chat Mode Length Guard
                     if is_chat_mode:
                         words = buffer.split()
                         if len(words) > 300:
@@ -615,10 +590,8 @@ class RAGPipeline:
                     if clean_content and not "<think>" in clean_content:
                         yield clean_content
 
-    # ──────────────────────────────────────────────────────
-    # GENERATION: Get answers from the local LLM
-    # ──────────────────────────────────────────────────────
-
+        # GENERATION: Get answers from the local LLM
+    
     def query(self, question: str, top_k: int = TOP_K, chat_history: list = None) -> RAGResponse:
         """
         Execute a full RAG query: Retrieve -> Augment -> Generate.
@@ -744,10 +717,8 @@ class RAGPipeline:
             else:
                 yield f"\n\n⚠️ Error: {error_msg}", relevant_chunks if first_token else []
 
-    # ──────────────────────────────────────────────────────
-    # UTILITY METHODS
-    # ──────────────────────────────────────────────────────
-
+        # UTILITY METHODS
+    
     def get_knowledge_base_stats(self) -> dict:
         """
         Get statistics about the current knowledge base.
@@ -817,14 +788,10 @@ class RAGPipeline:
         self._is_initialized = False
         print("[OK] All models unloaded. Resources freed.")
 
-
-# ──────────────────────────────────────────────────────────
 # STANDALONE TEST MODE
-# ──────────────────────────────────────────────────────────
 # When run directly (python rag_pipeline.py), this script
 # performs a quick end-to-end test of the RAG pipeline.
 # This is useful for debugging before launching Streamlit.
-# ──────────────────────────────────────────────────────────
 
 def main():
     """
@@ -879,7 +846,6 @@ def main():
         pipeline.shutdown()
 
     print("Done!")
-
 
 if __name__ == "__main__":
     main()
