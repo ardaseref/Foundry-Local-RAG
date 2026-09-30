@@ -1,23 +1,7 @@
 """
-Core RAG Logic
-This module is the BRAIN of our RAG assistant. It connects:
-
-  1. RETRIEVAL  -- Finds relevant document chunks from SQLite
-                   using cosine similarity between vectors
-  2. AUGMENTATION -- Builds a prompt with retrieved context
-  3. GENERATION -- Sends the augmented prompt to the local LLM
-                   (via Microsoft Foundry Local) for answering
-
-This module is designed to be IMPORTED by our Streamlit frontend.
-It exposes clean functions that the UI can call directly:
-
-    from rag_pipeline import RAGPipeline
-    pipeline = RAGPipeline()
-    pipeline.initialize()
-    answer, sources = pipeline.query("What is Foundry Local?")
-
+rag_pipeline.py
+Core RAG Logic - Retrieval, Augmentation, and Generation.
 """
-
 import json
 import math
 import sqlite3
@@ -41,11 +25,6 @@ from config import (
     SYSTEM_PROMPT_RAG,
     TOP_K,
 )
-
-# DATA CLASSES
-# We use dataclasses to structure our return values cleanly.
-# This makes the code more readable and type-safe compared
-# to returning raw dictionaries or tuples.
 
 @dataclass
 class RetrievedChunk:

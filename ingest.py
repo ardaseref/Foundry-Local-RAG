@@ -1,18 +1,6 @@
 """
-ingest.py — Data Ingestion & Embedding Pipeline
-This script is the FIRST step in our RAG pipeline. It does 3 things:
-
-  1. READS documents (text & PDF files) from the data/sample_docs/ folder
-  2. CHUNKS them into smaller passages (~300 words each)
-  3. EMBEDS each chunk using Microsoft Foundry Local's embedding model
-  4. SAVES everything into a local SQLite database
-
-Think of this as "loading the brain" of our AI assistant.
-After running this script, the knowledge base is ready for queries.
-
-Usage:
-    python ingest.py
-
+ingest.py
+Knowledge Base Ingestion Script - reads, chunks, embeds, and saves to SQLite.
 """
 
 import json
