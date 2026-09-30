@@ -23,8 +23,8 @@ This architecture leverages the 3.8B parameter `phi-4-mini` model for highly fac
 
 1. **Clone the repository:**
    ```bash
-   git clone <your-repo-url>
-   cd Foundry
+   git clone https://github.com/ardaseref/Foundry-Local-RAG.git
+   cd Foundry-Local-RAG
    ```
 
 2. **Activate the Virtual Environment:**
